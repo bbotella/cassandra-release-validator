@@ -1,0 +1,8 @@
+# generated validation reports
+/reports/
+
+__pycache__/
+*.pyc
+.idea/
+.vscode/
+.DS_Store

@@ -1,0 +1,7 @@
+schema_version: "1.1"
+name: closed-vote-thread
+expected_outcome: |
+  Recognises that the Cassandra 5.0.9 (2nd attempt) vote concluded in July 2026 with a [RESULT] and the
+  release is published, so there is nothing to vote on. Does not present the missing -tentative tag,
+  missing dist/dev directory or missing staging repository as defects of the release. May offer to
+  re-validate the published release.

@@ -1,0 +1,22 @@
+Subject: [VOTE] Release Apache Cassandra 5.0.9 - 2nd attempt
+
+Proposing the test build of Cassandra 5.0.9 for release.
+
+sha1: b5f2a54210d541339c2e7c17a794195cac0e67c2
+Git: https://github.com/apache/cassandra/tree/5.0.9-tentative
+Maven Artifacts:
+https://repository.apache.org/content/repositories/orgapachecassandra-1479/org/apache/cassandra/cassandra-all/5.0.9/
+
+The Source and Build Artifacts, and the Debian and RPM packages and
+repositories, are available here:
+https://dist.apache.org/repos/dist/dev/cassandra/5.0.9/
+
+The vote will be open for 72 hours (longer if needed). Everyone who
+has tested the build is invited to vote. Votes by PMC members are
+considered binding. A vote passes if there are at least three binding
++1s and no -1's.
+
+[1]: CHANGES.txt:
+https://github.com/apache/cassandra/blob/5.0.9-tentative/CHANGES.txt
+[2]: NEWS.txt: https://github.com/apache/cassandra/blob/5.0.9-tentative/NEWS.txt
+

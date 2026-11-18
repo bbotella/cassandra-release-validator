@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: which-votes-are-open
+expected_outcome: |
+  Lists the recent vote threads, identifies the Python Driver 3.31.0 vote (started 2026-11-16) as the
+  open one, says there is no open Cassandra, Sidecar or Analytics release vote, and is clear that the
+  driver releases are not covered by the validation tool.

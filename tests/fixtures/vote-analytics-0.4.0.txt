@@ -1,0 +1,75 @@
+Subject: [VOTE] Release Apache Cassandra Analytics 0.4.0
+
+Proposing the test build of Cassandra Analytics 0.4.0 for release.
+
+
+sha1: a32e5e6fc1f0f4356f06db00a7124e651b6d30ca
+
+Git: https://github.com/apache/cassandra-analytics/tree/0.4.0-tentative
+
+Maven Artifacts:
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/analytics-sidecar-client-common/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/analytics-sidecar-client/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/analytics-sidecar-vertx-client-all/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/analytics-sidecar-vertx-client/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-common/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-sidecar-client/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-cdc-codec_spark3_2.12/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-cdc-sidecar_spark3_2.12/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-cdc_spark3_2.12/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-core_spark3_2.12/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-integration-framework_spark3_2.12/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-integration-tests_spark3_2.12/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-spark-converter_spark3_2.12/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-avro-converter_spark3_2.12/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-bridge_spark3_2.12/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-cdc-codec_spark3_2.13/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-cdc-sidecar_spark3_2.13/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-cdc_spark3_2.13/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-core_spark3_2.13/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-integration-framework_spark3_2.13/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-integration-tests_spark3_2.13/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-analytics-spark-converter_spark3_2.13/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-avro-converter_spark3_2.13/0.4.0/
+
+https://repository.apache.org/content/repositories/orgapachecassandra-1457/org/apache/cassandra/cassandra-bridge_spark3_2.13/0.4.0/
+
+
+The Source and Build Artifacts and repositories, are available here:
+https://dist.apache.org/repos/dist/dev/cassandra/cassandra-analytics/0.4.0/
+
+
+The vote will be open for 72 hours (longer if needed). Everyone who has
+tested the build is invited to vote. Votes by PMC members are considered
+binding. A vote passes if there are at least three binding +1s and no -1's.
+
+
+[1]: CHANGES.txt:
+https://github.com/apache/cassandra-analytics/blob/0.4.0-tentative/CHANGES.txt
+
+[2]: NEWS.txt:
+https://github.com/apache/cassandra-analytics/blob/0.4.0-tentative/NEWS.txt
+

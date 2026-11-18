@@ -1,0 +1,8 @@
+schema_version: "1.1"
+name: analytics-rc-before-vote
+expected_outcome: |
+  Validates the staged Analytics 0.5.0 candidate in manual mode against both staging repositories,
+  reports that nothing fails, explains the warnings (generated files in the source tarball, POMs
+  without <scm>, shaded artifact without sources/javadoc) as non-blocking, and drafts a
+  "+1 (non-binding)" reply that only lists checks that actually ran, with numbers from the report.
+  It does not send anything.

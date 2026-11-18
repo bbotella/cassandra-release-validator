@@ -1,0 +1,34 @@
+Subject: [VOTE] Release Apache Cassandra Sidecar 0.4.0
+
+Proposing the test build of Cassandra Sidecar 0.4.0 for release.
+
+sha1: 5a2ba60b5486398b87a0b1bb25b9fd400d17ce3e
+Git: https://github.com/apache/cassandra-sidecar/tree/0.4.0-tentative
+Maven Artifacts:
+https://repository.apache.org/content/repositories/orgapachecassandra-1472/org/apache/cassandra/sidecar-server/0.4.0/
+https://repository.apache.org/content/repositories/orgapachecassandra-1472/org/apache/cassandra/sidecar-client/0.4.0/
+https://repository.apache.org/content/repositories/orgapachecassandra-1472/org/apache/cassandra/sidecar-adapters-cassandra41/0.4.0/
+https://repository.apache.org/content/repositories/orgapachecassandra-1472/org/apache/cassandra/sidecar-adapters-base/0.4.0/
+https://repository.apache.org/content/repositories/orgapachecassandra-1472/org/apache/cassandra/sidecar-vertx-client/0.4.0/
+https://repository.apache.org/content/repositories/orgapachecassandra-1472/org/apache/cassandra/sidecar-client-common/0.4.0/
+https://repository.apache.org/content/repositories/orgapachecassandra-1472/org/apache/cassandra/sidecar-vertx-client-all/0.4.0/
+https://repository.apache.org/content/repositories/orgapachecassandra-1472/org/apache/cassandra/sidecar-server-common/0.4.0/
+https://repository.apache.org/content/repositories/orgapachecassandra-1472/org/apache/cassandra/sidecar-vertx-auth-mtls/0.4.0/
+https://repository.apache.org/content/repositories/orgapachecassandra-1471/org/apache/cassandra/sidecar-client/0.4.0-jdk8/
+https://repository.apache.org/content/repositories/orgapachecassandra-1471/org/apache/cassandra/sidecar-vertx-client/0.4.0-jdk8/
+https://repository.apache.org/content/repositories/orgapachecassandra-1471/org/apache/cassandra/sidecar-client-common/0.4.0-jdk8/
+https://repository.apache.org/content/repositories/orgapachecassandra-1471/org/apache/cassandra/sidecar-vertx-client-all/0.4.0-jdk8/
+
+The Source and Build Artifacts, and the Debian and RPM packages and
+repositories, are available here:
+https://dist.apache.org/repos/dist/dev/cassandra/cassandra-sidecar/0.4.0/
+
+The vote will be open for 72 hours (longer if needed). Everyone who
+has tested the build is invited to vote. Votes by PMC members are
+considered binding. A vote passes if there are at least three binding
++1s and no -1's.
+
+[1]: CHANGES.txt:
+https://github.com/apache/cassandra-sidecar/blob/0.4.0-tentative/CHANGES.txt
+[2]: NEWS.txt: https://github.com/apache/cassandra-sidecar/blob/0.4.0-tentative/NEWS.txt
+

@@ -1,0 +1,22 @@
+Subject: [VOTE] Release Apache Cassandra 6.0-alpha2
+
+Proposing the test build of Cassandra 6.0-alpha2 for release.
+
+sha1: e874e3a90b1942b945477e6d9ba03880b4f4a19d
+Git: https://github.com/apache/cassandra/tree/6.0-alpha2-tentative
+Maven Artifacts:
+https://repository.apache.org/content/repositories/orgapachecassandra-1480/org/apache/cassandra/cassandra-all/6.0-alpha2/
+
+The Source and Build Artifacts, and the Debian and RPM packages and
+repositories, are available here:
+https://dist.apache.org/repos/dist/dev/cassandra/6.0-alpha2/
+
+The vote will be open for 72 hours (longer if needed). Everyone who
+has tested the build is invited to vote. Votes by PMC members are
+considered binding. A vote passes if there are at least three binding
++1s and no -1's.
+
+[1]: CHANGES.txt:
+https://github.com/apache/cassandra/blob/6.0-alpha2-tentative/CHANGES.txt
+[2]: NEWS.txt: https://github.com/apache/cassandra/blob/6.0-alpha2-tentative/NEWS.txt
+
