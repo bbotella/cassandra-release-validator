@@ -10,10 +10,10 @@ import traceback
 from pathlib import Path
 
 from . import net, vote_email
-from .checks import binary, dist, git, maven, packages, smoke, source
+from .checks import binary, dist, git, maven, packages, runtime, smoke, source
 from .context import Context
 from .gpg import KEYS_URL, Keyring
-from .projects import PROJECTS, VERSION_RE, by_name
+from .projects import MAVEN_CENTRAL, PROJECTS, VERSION_RE, by_name
 from .report import Report
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -63,6 +63,9 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("--tag", help="git tag to check (default: <version>-tentative)")
     m.add_argument("--staging-repo", action="append", default=[], metavar="N", help="Nexus staging repository number, e.g. 1484 (repeatable)")
     m.add_argument("--dist-url", help="dist directory (default: dist/dev for the project and version)")
+    m.add_argument("--released", action="store_true",
+                   help="validate an already published release: dist/release, the final tag, Maven Central and, for "
+                        "Cassandra, the public debian/redhat package repositories (like cassandra-check-release.sh released)")
     m.add_argument("--maven-base", metavar="URL", help="check the email's Maven artifacts in this repository instead of Nexus staging, e.g. https://repo1.maven.org/maven2/")
 
     c = p.add_argument_group("what to check")
@@ -71,6 +74,13 @@ def build_parser() -> argparse.ArgumentParser:
     c.add_argument("--build", action="store_true", help="build from the source tarball (Cassandra: ant, Sidecar: gradlew)")
     c.add_argument("--java-home", help="JDK for --smoke and --build (default: $JAVA_HOME)")
     c.add_argument("--smoke-timeout", type=int, default=300, help="seconds to wait for startup (default: 300)")
+    c.add_argument("--runtime", action="store_true",
+                   help="Cassandra only: per supported JDK, build the source tarball, start the binary tarball, install the "
+                        ".deb/.rpm packages and the apt/yum repositories in containers (cassandra-check-release.sh matrix)")
+    c.add_argument("--runtime-tests", metavar="LIST", help="subset of build,binary,deb,apt,rpm,yum for --runtime (default: all)")
+    c.add_argument("--jdks", metavar="LIST", help="JDKs for --runtime, e.g. 11,17 (default: java.supported in build.xml)")
+    c.add_argument("--container-engine", metavar="NAME", help="docker or podman for --runtime (default: whichever works)")
+    c.add_argument("--runtime-timeout", type=int, default=2160, help="seconds per --runtime container (default: 2160, as the script)")
 
     o = p.add_argument_group("output")
     o.add_argument("--workdir", type=Path, default=DEFAULT_WORKDIR, help=f"download/cache directory (default: {DEFAULT_WORKDIR})")
@@ -84,6 +94,8 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.released and not args.maven_base:
+        args.maven_base = MAVEN_CENTRAL  # a released Nexus repository ends up in Maven Central
     if args.list:
         return _list_votes(args)
     if args.thread_votes:
@@ -139,8 +151,8 @@ def main(argv: list[str] | None = None) -> int:
         project=project,
         version=version,
         sha1=info.sha1,
-        tag=args.tag or info.tag or project.rc_tag(version),
-        dist_url=args.dist_url or info.dist_url or project.dist_url(version),
+        tag=args.tag or (project.final_tag(version) if args.released else info.tag or project.rc_tag(version)),
+        dist_url=args.dist_url or (project.released_dist_url(version) if args.released else info.dist_url or project.dist_url(version)),
         staging_repos=info.staging_repos,
         maven_refs=info.maven,
         workdir=workdir,
@@ -169,6 +181,8 @@ def main(argv: list[str] | None = None) -> int:
             _guarded(ctx, group, step)
         if args.smoke:
             _guarded(ctx, "smoke", smoke.run)
+        if args.runtime:
+            _guarded(ctx, "runtime", runtime.run)
         _signer_summary(ctx)
     finally:
         keyring.close()
@@ -348,6 +362,10 @@ def _signer_summary(ctx: Context) -> None:
     if len(ctx.signers) == 1:
         signer = next(iter(ctx.signers))
         r.ok("All artifacts signed by the same key", f"{total} signatures by {signer}")
+    elif ctx.args.released:
+        # published repository metadata is re-signed by the release manager of each later release in the series
+        r.info("Signing keys", f"{len(ctx.signers)} different keys (expected for published package repositories)",
+               [f"{s}: {n} signatures" for s, n in ctx.signers.most_common()])
     else:
         r.warn("All artifacts signed by the same key", f"{len(ctx.signers)} different keys",
                [f"{s}: {n} signatures" for s, n in ctx.signers.most_common()])

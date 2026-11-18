@@ -67,6 +67,8 @@ source                 lists.apache.org thread URL or id, a saved .eml / text fi
 --smoke                also start the binary tarball (Cassandra / Sidecar) and check it comes up
 --build                also build from the source tarball
 --java-home DIR        JDK for --smoke / --build
+--runtime              Cassandra: the cassandra-check-release.sh matrix in containers, per supported JDK
+--released             validate a published release (dist/release, Maven Central, public deb/rpm repos)
 --skip GROUP           skip git | dist | packages | source | binary | maven (repeatable)
 -v, --verbose          show progress and every item of each check
 ```
@@ -86,6 +88,39 @@ artifacts before sending the vote:
 ```
 
 Add `--sha1 <commit>` to also check the tag against an expected commit.
+
+### Checking a published release (`--released`)
+
+`--released` checks a version that is already out, as `cassandra-check-release.sh released <version>`
+does. It checks dist/release, the final tag and Maven Central, and for Cassandra the public
+repositories at https://debian.cassandra.apache.org and https://redhat.cassandra.apache.org (filtered to
+that version, since they hold the whole series):
+
+```bash
+./validate-release --project cassandra --version 5.0.9 --released
+```
+
+### Runtime matrix in containers (`--runtime`)
+
+`--runtime` runs what [`cassandra-check-release.sh`](https://github.com/apache/cassandra-builds/pull/32)
+runs, for Apache Cassandra. For every JDK in `java.supported` of the tag's `build.xml` (8 and 11 for
+4.x), each in a throwaway container:
+
+| Test | Image | Success |
+|---|---|---|
+| `build`: `ant artifacts` from the source tarball | `eclipse-temurin:<jdk>-jdk` | `BUILD SUCCESSFUL` |
+| `binary`: start the binary tarball | `eclipse-temurin:<jdk>-jdk` | `Starting listening for CQL clients on` |
+| `deb`: `dpkg -i` the .deb files, start | `eclipse-temurin:<jdk>-jdk` | same |
+| `apt`: install from the staged (or public) apt repository | `eclipse-temurin:8-jdk`, else `debian:bullseye-slim` | same |
+| `rpm`: `rpm -i` the .rpm files (and noboolean), start | `almalinux:9` | same |
+| `yum`: install from the yum repository with `gpgcheck`/`repo_gpgcheck` (and noboolean) | `almalinux:9` | same |
+
+It needs Docker or Podman (`podman machine start` on macOS) and takes a long time: a source build
+takes several minutes per JDK. Narrow it with `--jdks 17` or `--runtime-tests binary,deb,rpm`.
+Every container's output is kept in `<workdir>/runtime/*.log`. It differs from the script on purpose:
+the JDKs come from `build.xml`, it uses a `signed-by` keyring instead of the removed `apt-key`, and
+installs from public repositories pin the exact version. It runs code from the release, so it is
+opt-in.
 
 ### Re-validating an old release
 
@@ -115,9 +150,10 @@ tool at it. This is how the tool itself was tested:
 | Source tarball | top-level directory name; LICENSE and NOTICE; **every file is byte-identical to the git tag** (git blob hashes, including submodules and symlinks the build dereferenced; files that differ only by CRLF line endings are a separate warning); files not in git; compiled code (`.jar`, `.class`, …); Apache license headers in source files (a light RAT approximation) |
 | Drivers | Python: sdist and wheels (wheel metadata version, LICENSE/NOTICE inside, Python versions and platforms covered); GoCQL: source tarball only; Java: source tarball and every artifact in the Nexus staging repo (POM `<licenses>`/`<scm>` inherited from a staged parent count). No binary-tarball or package checks. A tag that exists only on the GitHub mirror and not on gitbox is a warning |
 | Binary tarball | top-level directory; LICENSE and NOTICE; key files (`bin/cassandra`, `lib/apache-cassandra-<v>.jar`, …); jars carry the release version; no SNAPSHOT jars; `Implementation-Version` of the Cassandra jar |
-| Maven staging | each staging repo is open and crawled; every artifact listed in the email is staged; every file has a valid `.asc` and matching `.md5` / `.sha1` (plus `.sha256` / `.sha512` when present); POM coordinates match; no SNAPSHOT dependencies; license, `<scm>`, sources and javadoc jars present (warnings) |
+| Maven staging | each staging repo is open and crawled; every artifact listed in the email is staged; every file has a valid `.asc` and matching `.md5` / `.sha1` (plus `.sha256` / `.sha512` when present), and so does every `.asc`; POM coordinates match; no SNAPSHOT dependencies; license, `<scm>`, sources and javadoc jars present (warnings) |
 | `--smoke` | Cassandra starts, `nodetool version` reports the version and `nodetool status` shows the node `UN`; Sidecar starts and `/api/v1/__health` returns OK |
 | `--build` | Cassandra `ant jar`, Sidecar `./gradlew assemble` from the source tarball |
+| `--runtime` | Cassandra, per supported JDK in containers: source build, binary tarball, .deb and .rpm packages, apt and yum repositories (see above) |
 
 ### What the results mean
 
@@ -137,7 +173,7 @@ The tool doesn't replace judgement. Things voters often still do by hand:
 
 * look at `CHANGES.txt` / `NEWS.txt` for the release content;
 * run the full Apache RAT (`ant rat-check`, or the Gradle RAT task) and the test suite;
-* install the `.deb` / `.rpm` in a container and start the service;
+* install the Sidecar `.deb` / `.rpm` in a container and start the service (`--runtime` covers Cassandra);
 * build Cassandra Analytics, which first builds Cassandra itself (`./scripts/build-dependencies.sh`).
 
 ## Safety
@@ -148,7 +184,8 @@ Everything downloaded is treated as untrusted:
   is never read or changed.
 * tarballs are extracted with Python's `tarfile` `data` filter, which rejects absolute paths, `..`
   traversal and links that escape the destination.
-* nothing from the release is executed unless you pass `--smoke` or `--build`.
+* nothing from the release is executed unless you pass `--smoke`, `--build` or `--runtime` (`--runtime`
+  only inside throwaway containers).
 
 ## Keeping it up to date
 

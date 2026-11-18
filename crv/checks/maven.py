@@ -76,10 +76,10 @@ def run(ctx: Context) -> None:
             staged.append(Staged(base, "override", ref.group_path, ref.artifact, ref.version))
         if staged:
             r.info("Maven repository", f"{base} (only the {len(staged)} artifacts listed in the vote email)")
-        elif ctx.project.maven_discover:
+        elif _discover_pattern(ctx):
             staged = _discover(ctx, base)
-            r.info("Maven repository", f"{base} ({len(staged)} artifacts matching {ctx.project.maven_discover} "
-                   f"with version {ctx.version}; the vote email lists no individual artifacts)")
+            (r.info if staged else r.fail)("Maven repository", f"{base} ({len(staged)} artifacts matching {_discover_pattern(ctx)} "
+                                           f"with version {ctx.version}; no individual artifacts were listed)")
         else:
             r.fail("Maven repository", f"the vote email lists no artifacts to look for in {base}")
     else:
@@ -134,7 +134,7 @@ def run(ctx: Context) -> None:
             passed.append(f"{name}: {res.files} files")
     if passed:
         r.ok(
-            "Signatures, checksums and POM coordinates",
+            "Signatures, checksums (of the files and of their .asc) and POM coordinates",
             f"{len(passed)} of {len(staged)} artifacts ({total_files} files) valid",
             passed if ctx.args.verbose else [],
         )
@@ -149,10 +149,16 @@ def run(ctx: Context) -> None:
     _compare_with_dist(ctx, staged)
 
 
+def _discover_pattern(ctx: Context) -> str | None:
+    """Regex of artifactIds to look for: the project's own, or else its required artifacts."""
+    p = ctx.project
+    return p.maven_discover or ("|".join(f"(?:{r})" for r in p.required_maven_artifacts) or None)
+
+
 def _discover(ctx: Context, base: str, group: str = "org/apache/cassandra") -> list[Staged]:
     """Finds this project's artifacts with the release version in a large repository such as Maven Central."""
-    pattern = re.compile(ctx.project.maven_discover)
-    names = [n.rstrip("/") for n in net.list_dir(f"{base}{group}/") if n.endswith("/") and pattern.search(n)]
+    pattern = re.compile(_discover_pattern(ctx))
+    names = [n.rstrip("/") for n in net.list_dir(f"{base}{group}/") if n.endswith("/") and pattern.search(n.rstrip("/"))]
 
     def has_version(name: str) -> Staged | None:
         try:
@@ -255,20 +261,30 @@ def _verify_artifact(ctx: Context, s: Staged, pom_index: dict | None = None) -> 
             ctx.record_signature(sig)
             if not sig.ok:
                 problems.append(f"{f}.asc: {sig.error}")
-        present = [a for a in checksums.ALGOS if f"{f}.{a}" in files and (local / f"{f}.{a}").exists()]
         for algo in _REQUIRED_SUMS:
             if f"{f}.{algo}" not in files:
                 problems.append(f"{f}.{algo} missing")
-        actual = checksums.digests(path, present)
-        for algo in present:
-            try:
-                expected = checksums.parse((local / f"{f}.{algo}").read_text(errors="replace"), algo, f)
-            except checksums.ChecksumFormatError as e:
-                problems.append(f"{f}.{algo}: {e}")
-                continue
-            if expected != actual[algo]:
-                problems.append(f"{f}.{algo} does not match")
+        _check_sums(local, files, f, problems)
+        # The signature files carry checksums too (Nexus generates them); cassandra-check-release.sh checks them
+        if f + ".asc" in files and (local / (f + ".asc")).exists():
+            _check_sums(local, files, f + ".asc", problems)
     return res
+
+
+def _check_sums(local: Path, files: set[str], f: str, problems: list[str]) -> None:
+    """Verifies every checksum file present for f (md5, sha1, sha256, sha512)."""
+    present = [a for a in checksums.ALGOS if f"{f}.{a}" in files and (local / f"{f}.{a}").exists()]
+    if not present:
+        return
+    actual = checksums.digests(local / f, present)
+    for algo in present:
+        try:
+            expected = checksums.parse((local / f"{f}.{algo}").read_text(errors="replace"), algo, f)
+        except checksums.ChecksumFormatError as e:
+            problems.append(f"{f}.{algo}: {e}")
+            continue
+        if expected != actual[algo]:
+            problems.append(f"{f}.{algo} does not match")
 
 
 def _text(el, path: str) -> str | None:

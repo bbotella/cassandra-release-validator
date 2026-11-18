@@ -129,8 +129,16 @@ explains how to read their output.
   release, so ask the user before running them, and pass `--java-home` with a JDK the branch supports.
   The `java.supported` property in `build.xml` at the tag is authoritative: 4.0/4.1 support 8 and 11,
   5.0 supports 11 and 17, and 6.0/trunk support 11, 17 and 21. Sidecar and Analytics build with Java 11.
-- Installing the `.deb` / `.rpm` in a container, or running the project's own RAT task, when the user
-  wants packaging or licensing covered more deeply.
+- **`--runtime`** (Cassandra): the same matrix as the community's `cassandra-check-release.sh`
+  (cassandra-builds PR 32). For every JDK in `java.supported`, in containers, it builds the source tarball,
+  starts the binary tarball, installs the .deb and .rpm packages (plus noboolean), and installs from the
+  staged apt and yum repositories with signature checking. This is what "I ran cassandra-check-release.sh"
+  in a vote reply means, so offer it for Cassandra votes. It runs release code and takes a long time, so
+  ask first. It needs Docker or Podman (`podman machine start` on macOS). Narrow it with `--jdks` or
+  `--runtime-tests`. A failure's log is in `<workdir>/runtime/`; read it before calling it a release
+  problem, because image or network trouble (apt mirrors, yum crypto policy) is common.
+- Running the project's own RAT task, or installing Sidecar's .deb/.rpm in a container, when the user
+  wants licensing or packaging covered more deeply.
 
 ### 6. Recommend a vote and draft the reply
 
@@ -180,9 +188,19 @@ validate-release [source] [options]
   --maven-base URL         check the email's Maven artifacts in another repository (e.g. Maven Central)
   --skip GROUP             git | dist | packages | source | binary | maven
   --smoke / --build        start the binary tarball / build from source (executes release code)
+  --runtime                Cassandra: cassandra-check-release.sh matrix in containers (executes release code)
+  --jdks / --runtime-tests narrow --runtime, e.g. --jdks 17 --runtime-tests binary,deb,rpm
+  --released               check a published release (dist/release, Maven Central, public deb/rpm repos)
   --java-home DIR          JDK for --smoke / --build
   -v                       every item of every check
 ```
+
+**Checking a published release** (e.g. before upgrading, or to confirm what users download):
+`--released` checks dist/release, the final tag, Maven Central and, for Cassandra, the public apt/yum
+repositories, filtered to that version. It's the `released` mode of `cassandra-check-release.sh`:
+`<skill>/scripts/validate-release --project cassandra --version 5.0.9 --released [--runtime]`. Several
+signing keys there are normal, because each later release in the series re-signs the repository
+metadata.
 
 **Re-validating a release whose vote has already passed** (e.g. "compare with the previous release"):
 the `-tentative` tag, the dist/dev directory and the Nexus staging repository are all gone by then. Use

@@ -15,6 +15,9 @@ from dataclasses import dataclass
 
 DIST_DEV = "https://dist.apache.org/repos/dist/dev/cassandra/"
 DIST_RELEASE = "https://dist.apache.org/repos/dist/release/cassandra/"
+DEBIAN_PUBLIC = "https://debian.cassandra.apache.org/"  # where finish_release.sh publishes Cassandra's .deb
+REDHAT_PUBLIC = "https://redhat.cassandra.apache.org/"  # ... and the .rpm (per series: 50x/, 50x/noboolean/)
+MAVEN_CENTRAL = "https://repo1.maven.org/maven2/"
 GITBOX = "https://gitbox.apache.org/repos/asf/"
 NEXUS_REPOS = "https://repository.apache.org/content/repositories/"
 STAGING_PREFIX = "orgapachecassandra-"
@@ -88,8 +91,11 @@ class Project:
     def changes_heading_re(self, version: str) -> re.Pattern:
         return re.compile(self.changes_heading.replace("{v}", re.escape(version)))
 
-    def expected_dist_files(self, version: str, noboolean: bool = True) -> list[str]:
+    def expected_dist_files(self, version: str, noboolean: bool = True, released: bool = False) -> list[str]:
         """Every file the release scripts are expected to stage under dist/dev for this version.
+
+        For a released version (dist/release), the deb/rpm packages are not there: finish_release.sh
+        moves them to debian.cassandra.apache.org / redhat.cassandra.apache.org.
 
         Python wheels are not listed: their names depend on the platforms built, so the dist check
         accepts whatever is in the wheels directory and checks them separately.
@@ -100,6 +106,8 @@ class Project:
                 continue
             files.append(tarball)
             files += [tarball + s for s in SIGNATURE_SUFFIXES]
+        if released:
+            return files
         if self.packages == "simple":
             deb = f"debian/{self.tarball_prefix}_{version}_all.deb"
             rpm = f"redhat/{self.tarball_prefix}-{version}.noarch.rpm"

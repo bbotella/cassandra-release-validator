@@ -105,6 +105,15 @@ This is what the ASF actually releases, so it gets the strictest look.
 | No jar carries the release version / Implementation-Version wrong | blocker | Built with the wrong version. |
 | Expected files missing (`bin/cassandra`, `lib/apache-cassandra-<v>.jar`, ...) | blocker | |
 
+### Runtime matrix (`--runtime`)
+
+| Finding | Severity | Notes |
+|---|---|---|
+| Source build fails for a supported JDK | blocker, once confirmed | Read `runtime/build-jdk<N>.log`. A real compile or test-config error is a blocker. A network failure (apt mirror, Maven Central, Go download) is not; re-run that JDK with `--jdks N --runtime-tests build`. |
+| Binary tarball / .deb / .rpm doesn't start for a supported JDK | blocker, once confirmed | The log shows Cassandra's own output. JVM option errors for a JDK listed in `java.supported` are real bugs. |
+| apt / yum repository install fails | depends | First check the static packages section: if signatures and hashes pass there, the failure is usually the container (apt sources, yum crypto policy). If the repo metadata itself is the problem, it's a blocker for packages. |
+| A JDK not in `java.supported` fails | context | Only run it on purpose (`--jdks`). |
+
 ### Maven staging
 
 | Finding | Severity | Notes |
