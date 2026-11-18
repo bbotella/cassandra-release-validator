@@ -1,0 +1,68 @@
+Subject: [VOTE] Release Apache Cassandra Python Driver 3.31.0
+
+Greetings all!  I'm proposing the test build of Cassandra Python Driver
+3.31.0 for release.
+
+
+Git commit sha1 for this release: 25393c2e709a353aebb8219c8bfbe60accb7bcc2
+
+Git: https://github.com/apache/cassandra-python-driver/releases/tag/3.31.0
+
+Source release:
+
+https://dist.apache.org/repos/dist/dev/cassandra/cassandra-python-driver/3.31.0/
+
+Changelog:
+
+https://github.com/apache/cassandra-python-driver/blob/3.31.0/CHANGELOG.rst#3310
+
+
+3.31.0 is a small update to add explicit support for Python 3.15 and drop
+support for Python 3.10.  Our hope is that this is the last release in the
+3.x line with Python driver 4.0 arriving to replace it.
+
+
+For sake of convenience we’re following roughly the same release process
+used for 3.30.1.  Wheels for this release can be found in SVN [1].  As a
+convenience for testing I've also deployed this release as 3.31.0rc1 [2] on
+testpypi [3] .  You can install this package from testpypi via the
+following sequence of commands:
+
+
+uv pip install deprecated # necessary because transitive dependencies
+aren't available on testpypi
+
+uv pip install --index-url “https://test.pypi.org/simple/
+<https://test.pypi.org/simple/>” cassandra-driver==3.31.0rc1
+
+
+3.31.0rc1 follows Python naming conventions [4] for pre-releases.  The
+content of 3.31.0rc1 is identical to 3.31.0 with the exception of an
+additional commit which changes the version.  This can be confirmed by
+viewing the corresponding tag [5].
+
+
+The vote will be open for 72 hours (longer if needed) until ~9pm GMT on 19
+November 2026. Everyone who has tested the build is invited to vote.  Votes
+by PMC members are considered binding. A vote passes if there are at least
+three binding +1s and no -1's.
+
+
+Thanks all!
+
+
+- Bret -
+
+
+[1] -
+https://dist.apache.org/repos/dist/dev/cassandra/cassandra-python-driver/3.31.0/wheels/
+
+[2] - https://test.pypi.org/project/cassandra-driver/3.31.0rc1/
+
+[3] - https://test.pypi.org/
+
+[4] -
+https://packaging.python.org/en/latest/specifications/version-specifiers/#version-specifiers
+
+[5] - https://github.com/apache/cassandra-python-driver/tree/3.31.0rc1
+

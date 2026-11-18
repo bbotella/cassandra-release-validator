@@ -1,12 +1,14 @@
 # Cassandra release validator
 
-Checks a release candidate of **Apache Cassandra**, **Cassandra Sidecar** or **Cassandra Analytics**
-before you vote on it. Give it the `[VOTE]` email from dev@cassandra.apache.org (a link is enough).
+Checks a release candidate of **Apache Cassandra**, **Cassandra Sidecar**, **Cassandra Analytics**, the
+**Cassandra Python driver**, the **Cassandra GoCQL driver** or the **Cassandra Java driver** (4.x and 3.x)
+before you vote on it. The Node.js driver is not supported. Give it the `[VOTE]` email from dev@cassandra.apache.org (a link is enough).
 It reads the sha1, git tag, dist URL and Nexus staging repositories from the email, downloads
 everything that was staged, and checks it against what the
 [release process](https://cassandra.apache.org/_/development/release_process.html) and the
 `prepare_release.sh` scripts in [apache/cassandra-builds](https://github.com/apache/cassandra-builds)
-are expected to produce.
+are expected to produce. For the drivers, which cassandra-builds doesn't build, it checks against what
+their release managers stage (see `crv/projects.py`).
 
 ```bash
 ./validate-release --list
@@ -110,7 +112,8 @@ tool at it. This is how the tool itself was tested:
 | Signatures | verified with an **isolated, throwaway keyring** that contains only the official [KEYS](https://dist.apache.org/repos/dist/release/cassandra/KEYS) file; all signatures come from one key; the key is RSA 4096 |
 | Packages (Cassandra) | apt `InRelease` / `Release.gpg` signatures → `Release` hashes → `Packages` / `Sources` hashes → `.deb`, `.dsc` and source tarball in `pool/`; signed `.changes` / `.dsc` and the files they list; yum `repomd.xml` signature → repodata hashes → RPM checksums and versions; **embedded RPM signatures** |
 | Packages (all) | `.deb` control and `.rpm` header name/version/release (read in Python, so no `dpkg`/`rpm` is needed) |
-| Source tarball | top-level directory name; LICENSE and NOTICE; **every file is byte-identical to the git tag** (git blob hashes, including submodules and symlinks the build dereferenced); files not in git; compiled code (`.jar`, `.class`, …); Apache license headers in source files (a light RAT approximation) |
+| Source tarball | top-level directory name; LICENSE and NOTICE; **every file is byte-identical to the git tag** (git blob hashes, including submodules and symlinks the build dereferenced; files that differ only by CRLF line endings are a separate warning); files not in git; compiled code (`.jar`, `.class`, …); Apache license headers in source files (a light RAT approximation) |
+| Drivers | Python: sdist and wheels (wheel metadata version, LICENSE/NOTICE inside, Python versions and platforms covered); GoCQL: source tarball only; Java: source tarball and every artifact in the Nexus staging repo (POM `<licenses>`/`<scm>` inherited from a staged parent count). No binary-tarball or package checks. A tag that exists only on the GitHub mirror and not on gitbox is a warning |
 | Binary tarball | top-level directory; LICENSE and NOTICE; key files (`bin/cassandra`, `lib/apache-cassandra-<v>.jar`, …); jars carry the release version; no SNAPSHOT jars; `Implementation-Version` of the Cassandra jar |
 | Maven staging | each staging repo is open and crawled; every artifact listed in the email is staged; every file has a valid `.asc` and matching `.md5` / `.sha1` (plus `.sha256` / `.sha512` when present); POM coordinates match; no SNAPSHOT dependencies; license, `<scm>`, sources and javadoc jars present (warnings) |
 | `--smoke` | Cassandra starts, `nodetool version` reports the version and `nodetool status` shows the node `UN`; Sidecar starts and `/api/v1/__health` returns OK |

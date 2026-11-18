@@ -79,6 +79,42 @@ class ProjectNamingTest(unittest.TestCase):
     def test_analytics_expected_files(self):
         self.assertEqual(len(projects.ANALYTICS.expected_dist_files("0.5.0")), 8)
 
+    def test_driver_naming(self):
+        py, go = projects.PYTHON_DRIVER, projects.GOCQL_DRIVER
+        self.assertEqual(py.rc_tag("3.31.0"), "3.31.0")
+        self.assertEqual(py.src_tarball("3.31.0"), "cassandra_driver-3.31.0.tar.gz")
+        self.assertEqual(py.src_top_dir("3.31.0"), "cassandra_driver-3.31.0")
+        self.assertIsNone(py.bin_tarball("3.31.0"))
+        self.assertEqual(py.expected_dist_files("3.31.0"), ["cassandra_driver-3.31.0.tar.gz", "cassandra_driver-3.31.0.tar.gz.asc",
+                                                            "cassandra_driver-3.31.0.tar.gz.sha256", "cassandra_driver-3.31.0.tar.gz.sha512"])
+        self.assertEqual((go.rc_tag("2.2.0"), go.final_tag("2.2.0")), ("v2.2.0-tentative", "v2.2.0"))
+        self.assertEqual(go.src_tarball("2.2.0"), "apache-cassandra-gocql-driver-2.2.0.tar.gz")
+        self.assertTrue(go.changes_heading_re("2.2.0").match("## [2.2.0]"))
+        self.assertFalse(go.changes_heading_re("2.2.0").match("## [2.2.01]"))
+        self.assertTrue(projects.CASSANDRA.changes_heading_re("5.0.9").match("5.0.9"))
+        self.assertEqual(projects.by_name("Python Driver"), py)
+        self.assertEqual(projects.by_name("cassandra-gocql-driver"), go)
+        self.assertEqual(projects.by_name("Java Driver"), projects.JAVA_DRIVER)
+        self.assertIsNone(projects.by_name("Node.js Driver"))
+
+    def test_java_driver_naming(self):
+        j = projects.JAVA_DRIVER
+        self.assertEqual(j.src_tarball("4.19.4"), "apache-cassandra-java-driver-4.19.4-source.tar.gz")
+        self.assertEqual(j.src_top_dir("4.19.4"), "apache-cassandra-java-driver-4.19.4-source")
+        self.assertEqual(j.rc_tag("4.19.4"), j.final_tag("4.19.4"))
+        self.assertTrue(j.changes_heading_re("4.19.4").match("### 4.19.4"))
+        self.assertTrue(j.changes_heading_re("3.13.0").match("## 3.13.0"))
+
+    def test_pom_version_ignores_parent(self):
+        from crv.checks.git import _pom_version
+
+        pom = (
+            '<project xmlns="http://maven.apache.org/POM/4.0.0"><parent><groupId>org.apache</groupId>'
+            "<artifactId>apache</artifactId><version>23</version></parent>"
+            "<artifactId>java-driver-parent</artifactId><version>4.19.4</version></project>"
+        )
+        self.assertEqual(_pom_version(pom), "4.19.4")
+
 
 class ListDirTest(unittest.TestCase):
     def test_svn_and_nexus_listings(self):

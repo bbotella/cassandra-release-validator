@@ -1,0 +1,38 @@
+Subject: [VOTE] Release Apache Cassandra Java Driver 3.13.0
+
+   Greetings all!
+
+   I’m proposing the Cassandra Java Driver 3.13.0 for release.
+
+sha1: 0f5f0ad3a6b3f44672c4a18fca2845c885901988
+
+git: https://github.com/apache/cassandra-java-driver/tree/3.13.0/
+
+Maven Artifacts:
+https://repository.apache.org/content/repositories/orgapachecassandra-1481/
+
+   The Source release is available here:
+
+https://dist.apache.org/repos/dist/dev/cassandra/cassandra-java-driver/3.13.0/
+
+
+   This is a security release primarily aimed at updating Netty to a more
+recent version in order to address a large number of CVEs.  As discussed
+elsewhere [1] we have also updated the minimum required JDK from Java6 to
+Java8 in order to access additional bug fixes.  The full changelog can be
+found at
+https://github.com/apache/cassandra-java-driver/tree/3.13.0/changelog#3130.
+
+   The vote will be open for 120 hours (longer if needed). Everyone who has
+tested the build is invited to vote. Votes by PMC members are considered
+binding. A vote passes if there are at least three binding +1s and no -1's.
+
+   Thanks!
+
+
+      - Bret -
+
+
+[1] - See Jane's post on the future plans for 3.x and 4.x at
+https://lists.apache.org/thread/7r2jqfkz33y4x99mvso3mzzvo8bfc75k
+

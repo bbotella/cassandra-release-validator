@@ -13,6 +13,7 @@ Contents:
 5. The vote
 6. Failed vote / re-roll
 7. Finish and announce
+8. The Python, GoCQL and Java drivers
 
 ## 1. Roles and prerequisites
 
@@ -109,3 +110,25 @@ After that, send the vote email to dev@cassandra.apache.org. The user sends it, 
    `base.version` / CHANGES.txt (moving unreleased entries up) / debian/changelog; add the release at
    https://reporter.apache.org/addrelease.html?cassandra; update `upgrade_manifest.py` in cassandra-dtest.
    Sidecar and Analytics print their own, shorter lists.
+
+## 8. The Python, GoCQL and Java drivers
+
+The drivers are Cassandra PMC releases too: same dev@ list, same KEYS file, same 72-hour vote with three
+binding +1s. But cassandra-builds doesn't build them. Their release managers stage by hand, so the
+conventions below come from their vote emails (Python 3.30.1 / 3.31.0, GoCQL 2.1.x / 2.2.0, Java 4.19.4 / 3.13.0).
+
+| | Python driver | GoCQL driver | Java driver |
+|---|---|---|---|
+| Repository | `cassandra-python-driver` | `cassandra-gocql-driver` | `cassandra-java-driver` (4.x on `4.x`, 3.x on `3.x`) |
+| JIRA | CASSPYTHON | CASSGO | CASSJAVA |
+| Vote is on | the final tag `<v>`; `<v>rc1` is a separate tag (one version-bump commit later) for a TestPyPI upload | `v<v>-tentative`, renamed to `v<v>` after the vote | the final tag `<v>` |
+| dist/dev | `dev/cassandra/cassandra-python-driver/<v>/`: `cassandra_driver-<v>.tar.gz` (sdist) + `.asc/.sha256/.sha512`, and `wheels/` with one wheel per Python version and platform | `dev/cassandra/cassandra-gocql-driver/<v>/`: `apache-cassandra-gocql-driver-<v>.tar.gz` + `.asc/.sha256/.sha512` | `dev/cassandra/cassandra-java-driver/<v>/`: `apache-cassandra-java-driver-<v>-source.tar.gz` + `.asc/.sha256/.sha512`; the Maven artifacts are in a Nexus staging repo |
+| Version declared in | `pyproject.toml` | nowhere: the Go module version is the tag | root `pom.xml` (its own `<version>`, not the `org.apache:apache` parent's) |
+| Changelog | `CHANGELOG.rst` (`3.31.0` heading) | `CHANGELOG.md` (`## [2.2.0]` heading) | `changelog/README.md` (`### 4.19.4`, `## 3.13.0`) |
+| Published after the vote | PyPI (sdist and wheels) | the `v<v>` tag (Go modules are fetched from git) | Maven Central (the Nexus repo is released) |
+
+When the user is the RM for a driver release, the same advice applies: validate in manual mode before
+sending the vote (`--project python-driver|gocql-driver|java-driver --version <v> --sha1 <commit>`, plus
+`--staging-repo N` for Java). Check the
+known gaps listed in `triage.md` (Python: NOTICE in MANIFEST.in, signatures for the wheels; GoCQL: LF
+line endings in the tarball; Java: build the source assembly from a clean checkout), because they are cheaper to fix before the vote than to discuss during it.

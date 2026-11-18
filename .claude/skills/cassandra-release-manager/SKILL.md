@@ -1,6 +1,6 @@
 ---
 name: cassandra-release-manager
-description: Expert Apache Cassandra release manager. Validates release candidates of Apache Cassandra, Cassandra Sidecar and Cassandra Analytics with the validate-release tool, judges the findings against ASF release policy, reads what other voters found, and drafts the +1/-1 vote reply for dev@cassandra.apache.org. Use it whenever the user mentions a [VOTE] Release email or lists.apache.org thread, a release candidate, a -tentative tag, a Nexus staging repository (orgapachecassandra-NNNN), dist.apache.org/repos/dist/dev/cassandra, asks "should I +1 this", wants signatures/checksums/LICENSE/NOTICE of a Cassandra release checked, or is preparing, staging, re-rolling or finishing a Cassandra, Sidecar or Analytics release — even if they never name the tool. Not for operating, tuning or data-modelling a Cassandra cluster, and not for the driver projects (Java, Python, GoCQL, Node.js drivers), which the tool does not support.
+description: Expert Apache Cassandra release manager. Validates release candidates of Apache Cassandra, Cassandra Sidecar, Cassandra Analytics and the Cassandra Python, GoCQL and Java drivers with the validate-release tool, judges the findings against ASF release policy, reads what other voters found, and drafts the +1/-1 vote reply for dev@cassandra.apache.org. Use it whenever the user mentions a [VOTE] Release email or lists.apache.org thread, a release candidate, a -tentative tag, a Nexus staging repository (orgapachecassandra-NNNN), dist.apache.org/repos/dist/dev/cassandra, asks "should I +1 this", wants signatures/checksums/LICENSE/NOTICE of a Cassandra release checked, or is preparing, staging, re-rolling or finishing one of these releases — even if they never name the tool. Not for operating, tuning or data-modelling a Cassandra cluster, and not for Node.js driver releases, which the tool does not support.
 ---
 
 # Cassandra release manager
@@ -31,9 +31,14 @@ ending in "- 2nd attempt" supersedes the earlier thread for the same version, so
 one. Cassandra often votes 3–4 branches at the same time (e.g. 4.0.x, 4.1.x, 5.0.x, 6.0-alphaN). When
 asked to "check the votes", handle every open one.
 
-Driver votes (Java, Python, GoCQL, Node.js) show "(not supported by this tool)". Say so plainly. You can
-offer a generic manual check (signatures against the driver's KEYS, checksums, source vs tag), but be
-clear that this skill's tooling does not cover them.
+The Python, GoCQL and Java driver votes are validated like the others. Their releases are smaller:
+a source tarball, plus wheels for Python, and Maven artifacts only for Java. The tool skips the
+sections that don't apply. Driver release managers don't use cassandra-builds, so their staging
+conventions come from the drivers' own vote emails (see `references/release-process.md`). The Java
+driver email links only the Nexus staging repository, not each artifact; the tool checks every artifact
+in it. Node.js driver votes show "(not supported by this tool)". Say so plainly. You can offer a manual
+check (signatures against KEYS, checksums, source tarball vs tag), but be clear the tooling doesn't
+cover it.
 
 ### 2. Read the thread before judging
 
@@ -104,9 +109,12 @@ Depending on the release and the user's time, offer (don't silently skip, don't 
   compares the project's own jars in the tarball with the staged Maven artifacts, including the
   versions of shaded dependencies:
   `python3 -I <skill>/scripts/compare-bin-maven.py --project <p> --version <v>`.
-  Most useful for Analytics, which stages separate Spark 3 and Spark 4 builds.
-- **JIRA fix version vs CHANGES.txt**: lists tickets resolved for the version but missing from
-  CHANGES.txt, tickets still open for the version, and CHANGES.txt entries without the fix version:
+  Most useful for Analytics, which stages separate Spark 3 and Spark 4 builds. It doesn't apply to the
+  drivers (Python and GoCQL have no Maven artifacts; the Java driver ships no binary tarball).
+- **JIRA fix version vs the changelog**: lists tickets resolved for the version but missing from
+  the changelog, tickets still open for the version, and changelog entries without the fix version. It
+  works for all six projects (CHANGES.txt, or the drivers' CHANGELOG.rst / CHANGELOG.md /
+  changelog/README.md):
   `python3 -I <skill>/scripts/jira-vs-changes.py --project <p> --version <v> [--jira-version 0.5]`.
   This is RM housekeeping, so pass it on rather than voting on it.
 - **Signing key provenance**: when and by whom the key was added to KEYS, and how old it was:
@@ -165,7 +173,7 @@ validate-release [source] [options]
   --list [--days N]        recent [VOTE] Release threads
   --thread-votes THREAD    replies and votes in a thread
   --latest                 newest supported vote thread
-  --project P --version V  manual mode (P = cassandra | sidecar | analytics)
+  --project P --version V  manual mode (P = cassandra | sidecar | analytics | python-driver | gocql-driver | java-driver)
   --staging-repo N         Nexus staging repo number (repeatable)
   --sha1 S / --tag T       expected commit / tag override (default tag: <version>-tentative)
   --dist-url URL           dist directory override
@@ -190,7 +198,9 @@ To find `<rev>`, take the revision from the ETag of the released directory
 (`curl -sI https://dist.apache.org/repos/dist/release/cassandra/5.0.9/` shows `W/"86623//..."`). Then
 try somewhat lower revisions until `!svn/bc/<rev>/dev/...` lists files. The release move happened at
 that revision, so a few revisions earlier the RC was still in dev. Final tags are `cassandra-<v>`,
-`cassandra-sidecar-<v>` and `cassandra-analytics-<v>`.
+`cassandra-sidecar-<v>`, `cassandra-analytics-<v>`, `<v>` (Python and Java drivers: the vote is on
+that tag too) and `v<v>` (GoCQL). With `--maven-base` and an email that names only a staging repository
+(Java driver), the tool finds the project's artifacts in that repository by name.
 
 If the user points at a thread whose vote is already over, say so first (`--list` shows the
 `[RESULT]`). The FAILs a normal run would print there (tag or dist directory not found) are expected,

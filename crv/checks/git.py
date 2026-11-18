@@ -73,6 +73,7 @@ def run(ctx: Context) -> None:
     p = ctx.project
     r.section("Git")
 
+    fetch_url = p.git_url
     try:
         tag_commit = resolve_tag(p.git_url, ctx.tag)
     except Exception as e:  # noqa: BLE001
@@ -82,7 +83,18 @@ def run(ctx: Context) -> None:
         if tag_commit:
             r.ok(f"Tag {ctx.tag} exists", f"{p.git_url} -> {tag_commit}")
         else:
-            r.fail(f"Tag {ctx.tag} exists", f"not found in {p.git_url}")
+            # gitbox is the ASF's canonical repository; GitHub is a (normally two-way synced) mirror
+            github = f"{p.github_url}.git"
+            try:
+                tag_commit = resolve_tag(github, ctx.tag)
+            except Exception:  # noqa: BLE001
+                tag_commit = None
+            if tag_commit:
+                r.warn(f"Tag {ctx.tag} exists", f"only on GitHub ({tag_commit}), not on gitbox ({p.git_url}): "
+                       "pushed to GitHub only, or not synced yet")
+                fetch_url = github
+            else:
+                r.fail(f"Tag {ctx.tag} exists", f"not found in {p.git_url} nor on GitHub")
 
     if ctx.sha1 and tag_commit:
         if ctx.sha1 == tag_commit:
@@ -112,7 +124,7 @@ def run(ctx: Context) -> None:
         return
     git_dir = ctx.workdir / "git" / f"{p.repo}.git"
     try:
-        ctx.git_commit = fetch_commit(git_dir, p.git_url, ref, expected=tag_commit or ctx.sha1)
+        ctx.git_commit = fetch_commit(git_dir, fetch_url, ref, expected=tag_commit or ctx.sha1)
         ctx.git_dir = git_dir
         r.log(f"fetched {ref} -> {ctx.git_commit} into {git_dir}")
     except Exception as e:  # noqa: BLE001
@@ -129,35 +141,59 @@ def run(ctx: Context) -> None:
 def _check_version_file(ctx: Context) -> None:
     r = ctx.report
     p = ctx.project
+    if not p.version_file:
+        r.info("Version file", f"{p.display} has none: the version comes from the tag")
+        return
     content = show_file(ctx, p.version_file)
     if content is None:
         r.fail(f"Version in {p.version_file}", "file not found at the tag")
         return
-    m = re.search(p.version_pattern, content)
-    if not m:
-        r.fail(f"Version in {p.version_file}", "could not find the version property")
+    if p.version_pattern == "pom":
+        found = _pom_version(content)
+    else:
+        m = re.search(p.version_pattern, content)
+        found = m.group(1) if m else None
+    if not found:
+        r.fail(f"Version in {p.version_file}", "could not find the version")
         return
-    found = m.group(1)
     if found == ctx.version:
         r.ok(f"Version in {p.version_file}", found)
     else:
-        r.fail(f"Version in {p.version_file}", f"{found} (expected {ctx.version}; prepare_release.sh requires them to match)")
+        r.fail(f"Version in {p.version_file}", f"{found} (expected {ctx.version}; the release build must use the same version)")
+
+
+def _pom_version(content: str) -> str | None:
+    """The project's own <version> in a POM (not the one inside <parent>)."""
+    import xml.etree.ElementTree as ET
+
+    try:
+        root = ET.fromstring(content)
+    except ET.ParseError:
+        return None
+    ns = {"m": "http://maven.apache.org/POM/4.0.0"}
+    version = root.find("m:version", ns)
+    if version is None:
+        version = root.find("version")
+    return version.text.strip() if version is not None and version.text else None
 
 
 def _check_changes(ctx: Context) -> None:
     r = ctx.report
-    content = show_file(ctx, "CHANGES.txt")
+    name = ctx.project.changes_file
+    content = show_file(ctx, name)
     if content is None:
-        r.warn("CHANGES.txt", "not found at the tag")
+        r.warn(name, "not found at the tag")
         return
-    head = [line.strip() for line in content.splitlines()[:20]]
-    if ctx.version in head:
-        r.ok("CHANGES.txt has a section for this version", f"'{ctx.version}' heading found at the top")
+    heading = ctx.project.changes_heading_re(ctx.version)
+    head = [line.strip() for line in content.splitlines()[:30]]
+    check = f"{name} has a section for this version"
+    if any(heading.match(line) for line in head):
+        r.ok(check, f"'{ctx.version}' heading found at the top")
     elif any(ctx.version in line for line in head):
-        r.warn("CHANGES.txt has a section for this version", f"'{ctx.version}' mentioned near the top but not as a heading")
+        r.warn(check, f"'{ctx.version}' mentioned near the top but not as a heading")
     else:
         first = next((line for line in head if line), "")
-        r.fail("CHANGES.txt has a section for this version", f"top section is '{first}'")
+        r.fail(check, f"top section is '{first}'")
 
 
 def _check_news(ctx: Context) -> None:

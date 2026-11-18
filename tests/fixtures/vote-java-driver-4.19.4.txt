@@ -1,0 +1,38 @@
+Subject: [VOTE] Release Apache Cassandra Java Driver 4.19.4
+
+   Greetings all!
+
+   I’m proposing the Cassandra Java Driver 4.19.4 for release.
+
+sha1: b98e35eb055837d4396f207c4e4e9ab428da1e9d
+
+git: https://github.com/apache/cassandra-java-driver/tree/4.19.4
+
+Maven Artifacts:
+https://repository.apache.org/content/repositories/orgapachecassandra-1482/
+
+   The Source release is available here:
+https://dist.apache.org/repos/dist/dev/cassandra/cassandra-java-driver/4.19.4/
+
+
+   This is a security release primarily aimed at updating Netty to a more
+recent version in order to address a large number of CVEs.  This release
+mirrors the recently proposed 3.13.0 release [1] for the 4.x line.  Our
+original plan was that there would be no further 4.x releases (with all
+further work focused on 5.0.0) but the quantity of CVE fixes in this Netty
+upgrade seemed to warrant an additional release.  The full changelog can be
+found at
+https://github.com/apache/cassandra-java-driver/tree/4.19.4/changelog#4194.
+
+   The vote will be open for 120 hours (longer if needed). Everyone who has
+tested the build is invited to vote. Votes by PMC members are considered
+binding. A vote passes if there are at least three binding +1s and no -1's.
+
+   Thanks!
+
+
+      - Bret -
+
+
+[1] - https://lists.apache.org/thread/x8wbbqp3jrol6qvokmqvtyk56vvccsfx
+

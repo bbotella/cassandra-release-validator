@@ -8,7 +8,7 @@ from pathlib import Path
 from .. import checksums, net
 from ..context import Context
 
-PRIMARY_EXTS = (".tar.gz", ".deb", ".rpm", ".zip", ".tgz", ".jar")
+PRIMARY_EXTS = (".tar.gz", ".deb", ".rpm", ".zip", ".tgz", ".jar", ".whl")
 # Files reprepro / createrepo_c generate whose exact names can not be predicted
 _GENERATED = re.compile(r"^(debian/dists/|debian/pool/|(?:redhat/(?:noboolean/)?)repodata/)")
 
@@ -47,7 +47,20 @@ def run(ctx: Context) -> None:
     else:
         r.ok("All expected artifacts are staged", f"{len(expected)} expected files present")
 
-    unexpected = [f for f in files if f not in expected and not _GENERATED.match(f)]
+    wheels = [f for f in files if p.wheels_dir and f.startswith(p.wheels_dir) and f.endswith(".whl")]
+    if p.wheels_dir:
+        if wheels:
+            r.ok("Wheels are staged", f"{len(wheels)} wheels in {p.wheels_dir}")
+        else:
+            r.warn("Wheels are staged", f"no .whl files in {p.wheels_dir}")
+
+    def known(f: str) -> bool:
+        if f in expected or _GENERATED.match(f):
+            return True
+        # wheels, and any signature/checksum next to them
+        return bool(p.wheels_dir) and f.startswith(p.wheels_dir) and re.search(r"\.whl(\.asc|\.sha256|\.sha512)?$", f) is not None
+
+    unexpected = [f for f in files if not known(f)]
     if unexpected:
         r.warn("No unexpected files in the dist directory", f"{len(unexpected)} not produced by prepare_release.sh", unexpected)
     else:
@@ -120,6 +133,17 @@ def _verify_signatures(ctx: Context) -> None:
         # Cassandra's .deb/.rpm are signed inside the package/repository instead; checked in the packages section
         if ctx.project.packages == "cassandra":
             unsigned = [f for f in unsigned if not f.startswith(("debian/", "redhat/"))]
+        known = [f for f in unsigned if ctx.project.unsigned_ok and re.match(ctx.project.unsigned_ok, f)]
+        unsigned = [f for f in unsigned if f not in known]
+        if known:
+            no_sums = [f for f in known if f + ".sha512" not in ctx.dist_files and f + ".sha256" not in ctx.dist_files]
+            r.warn(
+                "Every artifact has a detached signature",
+                f"{len(known)} convenience binaries have no .asc"
+                + (f" and {len(no_sums)} no .sha256/.sha512" if no_sums else "")
+                + " (ASF distribution policy requires both; previous releases of this project did the same)",
+                known,
+            )
         if unsigned:
             r.fail("Every artifact has a detached signature", "", unsigned)
     if verified_primary:

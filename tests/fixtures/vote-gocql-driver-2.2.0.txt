@@ -1,0 +1,42 @@
+Subject: [VOTE] Release Apache Cassandra GoCQL Driver 2.2.0
+
+Hey folks,
+
+I'm proposing the Apache Cassandra GoCQL Driver 2.2.0 for release.
+
+sha1: 856b92387679da40584c8f982d6f43d3a42ad2b7
+git: https://github.com/apache/cassandra-gocql-driver/tree/v2.2.0-tentative
+
+The Source release is available here:
+https://dist.apache.org/repos/dist/dev/cassandra/cassandra-gocql-driver/2.2.0/
+
+Highlights of this release (see the changelog[2] for the full list):
+ - Request attempt interceptors API for queries and batches (CASSGO-39)
+ - Transmitted and received bytes metrics in ObservedQuery and
+ObservedBatch (CASSGO-136)
+ - Go version support is now 1.26 and 1.27 (CASSGO-143)
+
+To avoid any premature access to this release before the vote is
+complete we've temporarily used the tag "v2.2.0-tentative" to clearly
+indicate that this tag points to a tentative release. Once the vote
+passes this tag will be updated to "v2.2.0".
+
+The vote will be open for 72 hours (longer if needed). Everyone who
+has tested the build is invited to vote. Votes by PMC members are
+considered binding. A vote passes if there are at least three binding
++1s and no -1s.
+
+If you are interested in contributing to the testing of this release
+here are some ways you can do so:
+ - Download artifacts from the subversion repo linked above and verify
+signature (using KEYS[1]) and checksums
+ - Build the source tarball and ensure tests pass (you can use the
+provided Makefile)
+ - Upgrade gocql on an existing project or test app and run their testing suite
+
+Thanks,
+João
+
+[1] https://dist.apache.org/repos/dist/release/cassandra/KEYS
+[2] https://github.com/apache/cassandra-gocql-driver/blob/trunk/CHANGELOG.md#220
+

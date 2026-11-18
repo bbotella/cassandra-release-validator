@@ -61,6 +61,9 @@ def crawl(base_url: str, repo_id: str, root: str = "org/apache/cassandra/") -> l
 def run(ctx: Context) -> None:
     r = ctx.report
     r.section("Maven artifacts (Nexus staging)")
+    if not ctx.project.maven:
+        r.info("Maven artifacts", f"{ctx.project.display} does not publish to Maven: nothing staged in Nexus")
+        return
     base_override = ctx.args.maven_base
     if not ctx.staging_repos and not base_override:
         r.fail("Staging repositories", "none found in the vote email (use --staging-repo N)")
@@ -71,7 +74,14 @@ def run(ctx: Context) -> None:
         base = base_override.rstrip("/") + "/"
         for ref in ctx.maven_refs:
             staged.append(Staged(base, "override", ref.group_path, ref.artifact, ref.version))
-        r.info("Maven repository", f"{base} (only the {len(staged)} artifacts listed in the vote email)")
+        if staged:
+            r.info("Maven repository", f"{base} (only the {len(staged)} artifacts listed in the vote email)")
+        elif ctx.project.maven_discover:
+            staged = _discover(ctx, base)
+            r.info("Maven repository", f"{base} ({len(staged)} artifacts matching {ctx.project.maven_discover} "
+                   f"with version {ctx.version}; the vote email lists no individual artifacts)")
+        else:
+            r.fail("Maven repository", f"the vote email lists no artifacts to look for in {base}")
     else:
         for repo_id in ctx.staging_repos:
             url = repo_url(repo_id)
@@ -107,7 +117,9 @@ def run(ctx: Context) -> None:
         r.fail("Download Maven artifacts", f"{len(errors)} failed", [f"{u}: {e}" for u, e in errors.items()])
 
     with ThreadPoolExecutor(max_workers=ctx.jobs) as pool:
-        results = list(pool.map(lambda s: _verify_artifact(ctx, s), staged))
+        pom_index = {(s.group_path.replace("/", "."), s.artifact, s.version): _local_dir(ctx, s) / f"{s.artifact}-{s.version}.pom"
+                     for s in staged}
+        results = list(pool.map(lambda s: _verify_artifact(ctx, s, pom_index), staged))
     total_files = sum(res.files for res in results)
     failed, passed = [], []
     warnings: dict[str, list[str]] = {}
@@ -135,6 +147,22 @@ def run(ctx: Context) -> None:
             "PGP signatures and MD5/SHA-1/SHA-256/SHA-512 checksums verified, POMs have the release version"
         )
     _compare_with_dist(ctx, staged)
+
+
+def _discover(ctx: Context, base: str, group: str = "org/apache/cassandra") -> list[Staged]:
+    """Finds this project's artifacts with the release version in a large repository such as Maven Central."""
+    pattern = re.compile(ctx.project.maven_discover)
+    names = [n.rstrip("/") for n in net.list_dir(f"{base}{group}/") if n.endswith("/") and pattern.search(n)]
+
+    def has_version(name: str) -> Staged | None:
+        try:
+            versions = net.list_dir(f"{base}{group}/{name}/")
+        except net.HttpError:
+            return None
+        return Staged(base, "override", group, name, ctx.version) if f"{ctx.version}/" in versions else None
+
+    with ThreadPoolExecutor(max_workers=ctx.jobs) as pool:
+        return [s for s in pool.map(has_version, names) if s]
 
 
 def _local_dir(ctx: Context, s: Staged) -> Path:
@@ -193,7 +221,7 @@ class ArtifactResult:
     warnings: list[str] = field(default_factory=list)  # generic metadata issues, grouped across artifacts
 
 
-def _verify_artifact(ctx: Context, s: Staged) -> ArtifactResult:
+def _verify_artifact(ctx: Context, s: Staged, pom_index: dict | None = None) -> ArtifactResult:
     res = ArtifactResult()
     problems = res.errors
     local = _local_dir(ctx, s)
@@ -207,7 +235,7 @@ def _verify_artifact(ctx: Context, s: Staged) -> ArtifactResult:
         problems.append(f"{pom} missing")
         packaging = "jar"
     else:
-        packaging = _check_pom(ctx, s, local / pom, res)
+        packaging = _check_pom(ctx, s, local / pom, res, pom_index or {})
     if packaging != "pom":
         if packaging == "jar" and f"{base}.jar" not in files:
             problems.append(f"{base}.jar missing")
@@ -248,7 +276,39 @@ def _text(el, path: str) -> str | None:
     return found.text.strip() if found is not None and found.text else None
 
 
-def _check_pom(ctx: Context, s: Staged, pom: Path, res: ArtifactResult) -> str:
+def _declares_license(root) -> bool:
+    licenses = [(_text(l, "m:name") or "") + " " + (_text(l, "m:url") or "") for l in root.findall("m:licenses/m:license", _POM_NS)]
+    return any("Apache" in l or "apache.org/licenses" in l for l in licenses)
+
+
+def _inherits(root, pom_index: dict, declares) -> bool | None:
+    """Whether a parent POM in the chain declares something (Maven inherits <licenses> and <scm>).
+
+    True when a staged parent declares it, or the chain reaches the ASF parent POM (org.apache:apache,
+    which declares the Apache License); False when the chain ends without it; None when a parent isn't
+    staged so it can't be checked.
+    """
+    node = root
+    for _ in range(8):
+        parent = node.find("m:parent", _POM_NS)
+        if parent is None:
+            return False
+        key = (_text(parent, "m:groupId"), _text(parent, "m:artifactId"), _text(parent, "m:version"))
+        if key[:2] == ("org.apache", "apache"):
+            return True
+        path = pom_index.get(key)
+        if path is None or not path.exists():
+            return None
+        try:
+            node = ET.parse(path).getroot()
+        except ET.ParseError:
+            return None
+        if declares(node):
+            return True
+    return None
+
+
+def _check_pom(ctx: Context, s: Staged, pom: Path, res: ArtifactResult, pom_index: dict) -> str:
     problems = res.errors
     if not pom.exists():
         return "jar"
@@ -265,10 +325,10 @@ def _check_pom(ctx: Context, s: Staged, pom: Path, res: ArtifactResult) -> str:
         problems.append(f"POM groupId is {group}")
     if version != s.version:
         problems.append(f"POM version is {version}")
-    licenses = [(_text(l, "m:name") or "") + " " + (_text(l, "m:url") or "") for l in root.findall("m:licenses/m:license", _POM_NS)]
-    if not any("Apache" in l or "apache.org/licenses" in l for l in licenses):
+    if not _declares_license(root) and _inherits(root, pom_index, _declares_license) is False:
         res.warnings.append("POM does not declare the Apache License")
-    if root.find("m:scm", _POM_NS) is None:
+    has_scm = lambda node: node.find("m:scm", _POM_NS) is not None  # noqa: E731
+    if not has_scm(root) and _inherits(root, pom_index, has_scm) is False:
         res.warnings.append("POM has no <scm> section (Maven Central metadata requirement)")
     for dep in root.findall("m:dependencies/m:dependency", _POM_NS):
         dv = _text(dep, "m:version") or ""

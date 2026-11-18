@@ -57,7 +57,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--days", type=int, default=30, help="how far back --list/--latest look (default: 30)")
 
     m = p.add_argument_group("manual mode and overrides (take precedence over the vote email)")
-    m.add_argument("--project", choices=sorted(PROJECTS), help="project of the release")
+    m.add_argument("--project", help=f"project of the release: {', '.join(PROJECTS)} (or python, gocql)")
     m.add_argument("--version", help="version under vote, e.g. 5.0.9 or 6.0-alpha2")
     m.add_argument("--sha1", help="git commit the release must be built from")
     m.add_argument("--tag", help="git tag to check (default: <version>-tentative)")
@@ -98,7 +98,14 @@ def main(argv: list[str] | None = None) -> int:
         build_parser().print_help()
         return 2
 
+    if args.project and by_name(args.project) is None:
+        print(f"error: unknown project '{args.project}' (supported: {', '.join(PROJECTS)})", file=sys.stderr)
+        return 2
     _apply_overrides(info, args)
+    if info.project is None and info.unsupported and not args.project:
+        print(f"error: the Apache Cassandra {info.unsupported} is not supported (supported: {', '.join(p.display for p in PROJECTS.values())})",
+              file=sys.stderr)
+        return 2
     if info.project is None or info.version is None:
         print("error: could not determine the project and version; use --project and --version", file=sys.stderr)
         return 2
@@ -312,10 +319,16 @@ def _email_checks(r: Report, info: vote_email.VoteInfo, args) -> None:
     else:
         r.ok("Dist URL", info.dist_url)
 
+    if not p.maven:
+        if info.staging_repos:
+            r.warn("Maven staging repositories", f"the email lists {info.staging_repos}, but {p.display} does not publish to Maven")
+        return
     if info.staging_repos:
         r.ok("Maven staging repositories", ", ".join(f"orgapachecassandra-{s}" for s in info.staging_repos))
     else:
         r.fail("Maven staging repositories", "no repository.apache.org staging URL found")
+    if info.staging_repos and not info.maven:
+        r.info("Maven artifacts listed", "the email names only the staging repository; every artifact in it is checked")
     if info.maven:
         accepted = {v, f"{v}-jdk8"}
         wrong = [f"{m.artifact}/{m.version}" for m in info.maven if m.version not in accepted]

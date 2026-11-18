@@ -63,9 +63,46 @@ class ParseVoteEmailTest(unittest.TestCase):
         info = vote_email.parse(body, "[VOTE] Release Apache Cassandra 5.0.9")
         self.assertEqual([(m.artifact, m.version) for m in info.maven], [("cassandra-all", "5.0.9"), ("apache-cassandra", "5.0.9")])
 
-    def test_unsupported_project(self):
-        info = vote_email.parse("", "[VOTE] Release Apache Cassandra GoCQL Driver 2.2.0")
+    def test_python_driver(self):
+        info = load("vote-python-driver-3.31.0.txt")
+        self.assertEqual(info.project.key, "python-driver")
+        self.assertEqual(info.version, "3.31.0")
+        self.assertEqual(info.sha1, "25393c2e709a353aebb8219c8bfbe60accb7bcc2")  # "Git commit sha1 for this release:"
+        self.assertEqual(info.tag, "3.31.0")  # releases/tag/3.31.0, not the 3.31.0rc1 TestPyPI tag linked later
+        self.assertEqual(info.git_repo, "cassandra-python-driver")
+        self.assertEqual(info.dist_url, "https://dist.apache.org/repos/dist/dev/cassandra/cassandra-python-driver/3.31.0/")
+        self.assertEqual(info.staging_repos, [])
+        self.assertEqual(info.problems, [])
+
+    def test_gocql_driver(self):
+        info = load("vote-gocql-driver-2.2.0.txt")
+        self.assertEqual(info.project.key, "gocql-driver")
+        self.assertEqual(info.version, "2.2.0")
+        self.assertEqual(info.sha1, "856b92387679da40584c8f982d6f43d3a42ad2b7")
+        self.assertEqual(info.tag, "v2.2.0-tentative")
+        self.assertEqual(info.dist_url, "https://dist.apache.org/repos/dist/dev/cassandra/cassandra-gocql-driver/2.2.0/")
+        self.assertEqual(info.problems, [])
+
+    def test_java_driver_4x_and_3x(self):
+        for name, version, sha, repo in (
+            ("vote-java-driver-4.19.4.txt", "4.19.4", "b98e35eb055837d4396f207c4e4e9ab428da1e9d", "1482"),
+            ("vote-java-driver-3.13.0.txt", "3.13.0", "0f5f0ad3a6b3f44672c4a18fca2845c885901988", "1481"),
+        ):
+            info = load(name)
+            self.assertEqual(info.project.key, "java-driver")
+            self.assertEqual(info.version, version)
+            self.assertEqual(info.sha1, sha)
+            self.assertEqual(info.tag, version)  # the vote is on the final tag
+            self.assertEqual(info.staging_repos, [repo])
+            self.assertEqual(info.maven, [])  # only the repository root is linked
+            self.assertEqual(info.dist_url, f"https://dist.apache.org/repos/dist/dev/cassandra/cassandra-java-driver/{version}/")
+            self.assertEqual(info.problems, [])
+
+    def test_unsupported_driver_is_not_mistaken_for_cassandra(self):
+        info = load("vote-nodejs-driver-4.10.0.txt")
         self.assertIsNone(info.project)
+        self.assertEqual(info.unsupported, "Node.js Driver")
+        self.assertEqual(info.version, "4.10.0")
 
     def test_pasted_text_without_subject_header(self):
         body = (FIXTURES / "vote-cassandra-5.0.9.txt").read_text().split("\n", 2)[2]

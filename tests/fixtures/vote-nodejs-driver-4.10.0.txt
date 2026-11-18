@@ -1,0 +1,20 @@
+Subject: [VOTE] Release Apache Cassandra Node.js Driver 4.10.0
+
+Hi all,
+
+I'd like to propose the release of Apache Cassandra Node.js Driver 4.10.0.
+
+Release notes:
+https://github.com/apache/cassandra-nodejs-driver/blob/v4.10.0/CHANGELOG.md
+Git: https://github.com/apache/cassandra-nodejs-driver/tree/v4.10.0
+Git Commit Hash: 07d9a6eeae3024f2cd7dcf8e00fb647ac9844814
+Source release:
+https://dist.apache.org/repos/dist/dev/cassandra/cassandra-nodejs-driver/4.10.0/
+
+The vote will be open for 120 hours (longer if needed). Everyone who has
+tested the build is invited to vote. Votes by PMC members are considered
+binding. A vote passes if there are at least three binding +1s and no -1's.
+
+Thanks,
+Jane He
+

@@ -18,12 +18,19 @@ LISTS_API = "https://lists.apache.org/api/"
 LIST_NAME = "dev"
 LIST_DOMAIN = "cassandra.apache.org"
 
+# Java and Node.js drivers are matched too, so that they are recognised (and reported as unsupported)
+# instead of being mistaken for an Apache Cassandra release.
 _SUBJECT = re.compile(
-    r"\[VOTE\]\s*Release\s+Apache\s+Cassandra(?:\s+(?P<proj>Sidecar|Analytics))?\s+(?P<version>\d[\w.\-]*\w)",
+    r"\[VOTE\]\s*Release\s+Apache\s+Cassandra"
+    r"(?:\s+(?P<proj>Sidecar|Analytics|(?:Python|GoCQL|Go|Java|Node\.?js|C\+\+|C#)\s+Driver))?"
+    r"\s+(?P<version>\d[\w.\-]*\w)",
     re.IGNORECASE,
 )
-_SHA1 = re.compile(r"\bsha-?1?\s*[:=]\s*([0-9a-f]{40})\b", re.IGNORECASE)
-_GITHUB_TAG = re.compile(r"https?://github\.com/apache/(?P<repo>cassandra[\w-]*)/tree/(?P<tag>[^\s/<>\"')]+)")
+# "sha1: <hex>", "SHA: <hex>", "Git commit sha1 for this release: <hex>"
+_SHA1 = re.compile(r"\bsha-?1?\b[^\n:=]{0,40}[:=]\s*([0-9a-f]{40})\b", re.IGNORECASE)
+_GITHUB_TAG = re.compile(
+    r"https?://github\.com/apache/(?P<repo>cassandra[\w-]*)/(?:tree|releases/tag)/(?P<tag>[^\s/<>\"')]+)"
+)
 _GITBOX_TAG = re.compile(
     r"https?://gitbox\.apache\.org/repos/asf\?p=(?P<repo>cassandra[\w-]*)\.git;a=\w+;h=refs/tags/(?P<tag>[^\s;<>\"')]+)"
 )
@@ -63,6 +70,7 @@ class VoteInfo:
     staging_repos: list[str] = field(default_factory=list)
     maven: list[MavenRef] = field(default_factory=list)
     problems: list[str] = field(default_factory=list)  # inconsistencies found while parsing
+    unsupported: str | None = None  # a recognised but unsupported project, e.g. "Java Driver"
 
 
 def parse(body: str, subject: str = "") -> VoteInfo:
@@ -72,9 +80,11 @@ def parse(body: str, subject: str = "") -> VoteInfo:
     text = re.sub(r"(https?://\S+/)\n(?=[\w.\-]+(?:/[\w.\-]*)*/?[ \t]*(?:\n|$))", r"\1", body)
 
     m = _SUBJECT.search(subject) or _SUBJECT.search(text)
+    unsupported = False
     if m:
         info.project = by_name(m.group("proj") or "")
         info.version = m.group("version")
+        unsupported = info.project is None  # e.g. the Java or Node.js driver
 
     sha = _SHA1.search(text)
     if sha:
@@ -117,6 +127,9 @@ def parse(body: str, subject: str = "") -> VoteInfo:
             if k not in seen:
                 seen.add(k)
                 info.maven.append(ref)
+    if unsupported:  # never fall back to another project from the links in the email
+        info.project = None
+        info.unsupported = m.group("proj")
     return info
 
 
