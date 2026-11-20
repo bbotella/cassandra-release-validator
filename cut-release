@@ -1,0 +1,20 @@
+#!/usr/bin/env python3
+"""Cut Apache Cassandra / Sidecar / Analytics releases one step at a time. Run with --help for usage."""
+
+import sys
+from pathlib import Path
+
+if sys.version_info < (3, 9):
+    sys.exit("cut-release needs Python 3.9 or newer")
+
+# Import the package that lives next to this script (never from the current directory).
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from crv.release.cli import main  # noqa: E402
+
+if __name__ == "__main__":
+    sys.stdout.reconfigure(line_buffering=True)
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        sys.exit(130)

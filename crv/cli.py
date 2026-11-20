@@ -66,6 +66,9 @@ def build_parser() -> argparse.ArgumentParser:
     m.add_argument("--released", action="store_true",
                    help="validate an already published release: dist/release, the final tag, Maven Central and, for "
                         "Cassandra, the public debian/redhat package repositories (like cassandra-check-release.sh released)")
+    m.add_argument("--nexus-url", metavar="URL", help="base of the staging repositories (default: repository.apache.org)")
+    m.add_argument("--git-url", metavar="URL", help="repository holding the tag (default: gitbox)")
+    m.add_argument("--keys", metavar="FILE_OR_URL", help="KEYS to trust (default: dist/release/cassandra/KEYS)")
     m.add_argument("--maven-base", metavar="URL", help="check the email's Maven artifacts in this repository instead of Nexus staging, e.g. https://repo1.maven.org/maven2/")
 
     c = p.add_argument_group("what to check")
@@ -139,13 +142,16 @@ def main(argv: list[str] | None = None) -> int:
     report.section("Signing keys")
     keys_file = workdir / "KEYS"
     try:
-        net.download(KEYS_URL, keys_file, refresh=True)
+        if args.keys and Path(args.keys).is_file():
+            keys_file.write_bytes(Path(args.keys).read_bytes())
+        else:
+            net.download(args.keys or KEYS_URL, keys_file, refresh=True)
         keyring = Keyring(keys_file)
     except Exception as e:  # noqa: BLE001
         report.fail("KEYS", f"cannot set up the keyring: {e}")
         report.print_summary()
         return 1
-    report.ok("KEYS imported into an isolated keyring", f"{keyring.imported} keys from {KEYS_URL}")
+    report.ok("KEYS imported into an isolated keyring", f"{keyring.imported} keys from {args.keys or KEYS_URL}")
 
     ctx = Context(
         project=project,

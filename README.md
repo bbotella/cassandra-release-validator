@@ -47,6 +47,42 @@ The skill's test cases are in `.claude/skills/cassandra-release-manager/evals/`.
 v2.1.269+, running `claude plugin eval . --allow-tools Write,Edit,Bash` from the skill's directory
 re-runs them with and without the skill. These are real, billed model runs.
 
+## Cutting a release (`cut-release`)
+
+`cut-release` replicates the release scripts of
+[apache/cassandra-builds](https://github.com/apache/cassandra-builds) (`prepare_release.sh`,
+`finish_release.sh`) as small, resumable steps:
+
+```bash
+./cut-release analytics 0.6.0 plan              # the steps and where you are
+./cut-release analytics 0.6.0 preflight         # read-only checks
+./cut-release analytics 0.6.0 tag               # dry run: prints every command
+./cut-release analytics 0.6.0 tag --confirm     # does it
+```
+
+- **Dry run by default:** every step that changes anything outside your machine (git push, Nexus
+  deploy, svn commit, JFrog upload) prints its commands, and only acts with `--confirm`.
+- **State:** each release has a state file and logs under
+  `~/.cache/cassandra-release-validator/releases/`. Steps run in order; a failed step can be re-run.
+- **Release container:** builds, packaging and signing run in a container (`release/Containerfile`,
+  Debian with Temurin 8/11/17/21) via Docker or Podman. Your signing key stays on your Mac: the
+  container signs through your gpg-agent (`docs/release-signing.md`).
+- **Rehearsal:** `--rehearsal` runs the same steps against a local sandbox (bare git repo, svn
+  repository, file-based Maven repos, a throwaway key), so a release can be practised with nothing
+  public. `cut-release <project> <version> cleanup --rehearsal` deletes the sandbox and its key.
+- **The vote gates the finish:** `tally` only succeeds once the vote is 72 hours old with at least
+  three +1s and no -1. Until then it reports `NOT YET` and the finish steps stay blocked.
+- **Re-rolls:** `reroll` deletes whatever this attempt got to (the tentative tag, the dist/dev
+  directory) and starts the next attempt.
+- **Your part:** you still Close, Drop and Release the staging repositories in the Nexus UI, and send
+  the mails. `vote-email` and `post-release` write the drafts.
+- **Status:** Analytics (13 steps) and Sidecar (15 steps, including the JFrog upload) have been
+  rehearsed end to end. No real release has been cut with it yet. Cassandra's packaging steps are
+  still to do.
+- **Upstream changes:** `docs/parity.md` maps every step to the official script lines, explains each
+  intentional difference, and records the official scripts' hashes. `cut-release … check-upstream`
+  tells you when they change.
+
 ## Requirements
 
 * Python 3.9+ (standard library only, nothing to `pip install`)

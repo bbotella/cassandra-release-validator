@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Runs the cut-release tool of the repository this skill belongs to.
+# Works when the skill directory is symlinked into ~/.claude/skills (the link is resolved first).
+# Set CASSANDRA_RELEASE_VALIDATOR to the repository path to use a checkout somewhere else.
+set -euo pipefail
+
+if [[ -n "${CASSANDRA_RELEASE_VALIDATOR:-}" ]]; then
+    repo="$CASSANDRA_RELEASE_VALIDATOR"
+else
+    real="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "${BASH_SOURCE[0]}")"
+    # <repo>/.claude/skills/cassandra-release-manager/scripts/validate-release
+    repo="$(cd "$(dirname "$real")/../../../.." && pwd)"
+fi
+
+if [[ ! -x "$repo/cut-release" ]]; then
+    echo "cut-release not found in $repo." >&2
+    echo "Clone the cassandraReleasesValidator repository and set CASSANDRA_RELEASE_VALIDATOR to its path." >&2
+    exit 2
+fi
+exec "$repo/cut-release" "$@"

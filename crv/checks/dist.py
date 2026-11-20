@@ -40,7 +40,9 @@ def run(ctx: Context) -> None:
     r.log(f"{len(files)} files listed")
 
     noboolean = _expects_noboolean(ctx, files)
-    expected = p.expected_dist_files(ctx.version, noboolean=noboolean, released=ctx.args.released)
+    package_release = p.simple_package_release(ctx.version, files) if p.packages == "simple" else None
+    expected = p.expected_dist_files(ctx.version, noboolean=noboolean, released=ctx.args.released,
+                                     package_release=package_release)
     missing = [f for f in expected if f not in files]
     if missing:
         r.fail("All expected artifacts are staged", f"{len(missing)} missing", missing)

@@ -1,0 +1,28 @@
+# The release container: everything the release scripts need, on Debian, for any project.
+# Built by cut-release on first use (tag crv-release:<hash of this file>).
+#
+# JDKs come from the official Eclipse Temurin images (multi-arch), one per supported release line.
+FROM docker.io/library/eclipse-temurin:8-jdk AS jdk8
+FROM docker.io/library/eclipse-temurin:11-jdk AS jdk11
+FROM docker.io/library/eclipse-temurin:17-jdk AS jdk17
+FROM docker.io/library/eclipse-temurin:21-jdk AS jdk21
+
+FROM docker.io/library/debian:bookworm
+
+ENV DEBIAN_FRONTEND=noninteractive
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ant ant-optional build-essential ca-certificates createrepo-c curl devscripts dpkg-dev \
+        git gnupg2 less maven python3 reprepro rpm socat subversion unzip wget xz-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=jdk8  /opt/java/openjdk /opt/jdk-8
+COPY --from=jdk11 /opt/java/openjdk /opt/jdk-11
+COPY --from=jdk17 /opt/java/openjdk /opt/jdk-17
+COPY --from=jdk21 /opt/java/openjdk /opt/jdk-21
+
+# Default JDK; steps set JAVA_HOME per build.
+ENV JAVA_HOME=/opt/jdk-11
+ENV PATH=/opt/jdk-11/bin:$PATH
+
+# gpg only ever talks to the forwarded agent of the release manager's machine (see docs/release-signing.md)
+RUN mkdir -p -m 700 /root/.gnupg && echo no-autostart > /root/.gnupg/gpg.conf

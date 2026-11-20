@@ -73,15 +73,18 @@ def run(ctx: Context) -> None:
     p = ctx.project
     r.section("Git")
 
-    fetch_url = p.git_url
+    git_url = ctx.args.git_url or p.git_url  # --git-url: e.g. a rehearsal repository
+    fetch_url = git_url
     try:
-        tag_commit = resolve_tag(p.git_url, ctx.tag)
+        tag_commit = resolve_tag(git_url, ctx.tag)
     except Exception as e:  # noqa: BLE001
         r.fail(f"Resolve tag {ctx.tag}", str(e))
         tag_commit = None
     else:
         if tag_commit:
-            r.ok(f"Tag {ctx.tag} exists", f"{p.git_url} -> {tag_commit}")
+            r.ok(f"Tag {ctx.tag} exists", f"{git_url} -> {tag_commit}")
+        elif ctx.args.git_url:
+            r.fail(f"Tag {ctx.tag} exists", f"not found in {git_url}")
         else:
             # gitbox is the ASF's canonical repository; GitHub is a (normally two-way synced) mirror
             github = f"{p.github_url}.git"
@@ -110,7 +113,7 @@ def run(ctx: Context) -> None:
     final_tag = p.final_tag(ctx.version)
     if ctx.tag != final_tag:
         try:
-            final_commit = resolve_tag(p.git_url, final_tag)
+            final_commit = resolve_tag(git_url, final_tag)
         except Exception:  # noqa: BLE001
             final_commit = None
         if final_commit:

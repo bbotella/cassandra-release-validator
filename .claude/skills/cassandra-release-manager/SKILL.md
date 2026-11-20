@@ -1,6 +1,6 @@
 ---
 name: cassandra-release-manager
-description: Expert Apache Cassandra release manager. Validates release candidates of Apache Cassandra, Cassandra Sidecar, Cassandra Analytics and the Cassandra Python, GoCQL and Java drivers with the validate-release tool, judges the findings against ASF release policy, reads what other voters found, and drafts the +1/-1 vote reply for dev@cassandra.apache.org. Use it whenever the user mentions a [VOTE] Release email or lists.apache.org thread, a release candidate, a -tentative tag, a Nexus staging repository (orgapachecassandra-NNNN), dist.apache.org/repos/dist/dev/cassandra, asks "should I +1 this", wants signatures/checksums/LICENSE/NOTICE of a Cassandra release checked, or is preparing, staging, re-rolling or finishing one of these releases — even if they never name the tool. Not for operating, tuning or data-modelling a Cassandra cluster, and not for Node.js driver releases, which the tool does not support.
+description: Expert Apache Cassandra release manager. Cuts Cassandra Analytics (and Sidecar) releases step by step with cut-release (dry run first, the user's go-ahead before every public action), and validates release candidates of Cassandra, Sidecar, Analytics and the Python, GoCQL and Java drivers with validate-release: judges findings against ASF policy, reads what other voters found, drafts the +1/-1 reply. Use it whenever the user mentions a [VOTE] Release email or lists.apache.org thread, a release candidate, a -tentative tag, a Nexus staging repository (orgapachecassandra-NNNN), dist.apache.org/repos/dist/dev/cassandra, "should I +1 this", checking signatures/checksums/LICENSE/NOTICE, or cutting, staging, re-rolling or finishing a release (prepare_release.sh, finish_release.sh) — even without naming the tools. Not for operating or modelling a Cassandra cluster, nor for Node.js driver releases.
 ---
 
 # Cassandra release manager
@@ -166,12 +166,66 @@ report, and put each non-blocking issue on one line (suggest the user files a JI
 text, since dev@ is a plain-text list. **Don't send it yourself.** Posting to a public ASF list is the
 user's action. Hand them the text, plus the thread link to reply to.
 
-## When the user is the release manager
+## Cutting a release (the user is the release manager)
 
-Before sending the `[VOTE]` email, run manual mode against the staged candidate (step 3). A FAIL there
-is far cheaper to fix than a failed vote. For the release lifecycle itself (prepare_release.sh per
-project, closing the Nexus repository, the vote email templates, re-rolling after a -1, and
-finish_release.sh / promotion / announcement), read `references/release-process.md`.
+`cut-release` (wrapper: `<skill>/scripts/cut-release`) replicates the cassandra-builds release scripts
+as small resumable steps. Analytics and Sidecar have been rehearsed end to end, but no real release
+has been cut with it yet: say so when offering it. Cassandra's packaging steps are not implemented yet,
+so for Cassandra point the RM to
+`references/release-process.md` and the official scripts. `docs/parity.md` maps every step to the
+official script lines.
+
+```bash
+<skill>/scripts/cut-release <project> <version> plan        # the steps, and which are done
+<skill>/scripts/cut-release <project> <version> <step>      # a dry run for outward steps
+<skill>/scripts/cut-release <project> <version> <step> --confirm
+```
+
+**Rules: these are not negotiable, because a release is public and permanent:**
+
+- Run every outward step **without `--confirm` first**, show the user the commands it would run, and
+  only add `--confirm` after the user says yes **to that step**. A yes to one step is not a yes to the
+  next one.
+- Never send email (the user sends the `[VOTE]`, `[RESULT]` and `[RELEASE]` mails). Never click or
+  drive the Nexus UI: Close, Drop and Release are the user's actions.
+- Never type, read or ask for a password, token or passphrase. Credentials stay in the user's config
+  (`~/.gradle/gradle.properties`, `~/.m2/settings.xml`, svn's keychain cache, gpg-agent,
+  `ARTIFACTORY_API_KEY`). `preflight` checks they exist by name only.
+- If a step fails, stop. Read its log (the path is printed) and explain. Don't retry with `--force`
+  unless the user agrees, and never re-roll without the user saying so.
+
+**Workflow:**
+
+1. `preflight` (read-only; your release key with `--signing-key` or `$gpg_key`). Fix every FAIL first.
+2. Offer a **rehearsal** first: the same steps with `--rehearsal`, against a local sandbox (bare git
+   repo, svn repo, file-based Maven repos, a throwaway signing key). Nothing leaves the machine. A
+   rehearsal of the real version catches build and signing problems before anything is public. Both
+   builds need Cassandra dtest jars, which `build-publish` builds; a rehearsal can reuse built ones
+   with `--dependencies ~/dev/cassandra-analytics/dependencies` or `~/dev/cassandra-sidecar/dtest-jars`.
+   A rehearsal may run before the "Prepare <v> release" commit (the version check only warns), but
+   `validate` then FAILs on the version: to go on past it in a rehearsal only, use `--force`.
+3. `tag` → `build-publish` (a long build: run it in the background). The user then **Closes** the
+   staging repository/repositories in Nexus.
+4. `staging` (finds the closed repositories) → `stage-dist` (Sidecar: also `stage-packages`) →
+   `validate`. A FAIL here means fix and `reroll`, not a vote.
+5. `vote-email` writes the drafts to `~/Mail`. Show the user the draft; the user sends it.
+6. After 72 hours, run `tally`. It succeeds only once the vote is 72 hours old with at least three +1s
+   and no -1. Before that it reports `NOT YET` (exit 3) and the finish steps stay blocked. Never
+   `--force` past it. The user confirms which +1s are binding: three binding +1s and no -1 pass the
+   vote.
+7. `finish-tag` → `finish-dist` (PMC only: if the user isn't on the PMC, give a PMC member the
+   dry-run command) → Sidecar `finish-packages` → the user **Releases** the Nexus repositories →
+   `nexus-release` → `verify-published` → `post-release` (the `[RELEASE]` draft and the checklist).
+
+A `-1`, or a problem the RM wants to fix: `reroll` deletes whatever the attempt got to (the tentative
+tag, the dist/dev directory), and starts the next attempt. The vote subject then gets "- 2nd attempt".
+The user drops the Nexus repositories and replies on the thread.
+
+After a rehearsal, offer `cut-release <project> <version> cleanup --rehearsal`. It deletes the sandbox
+and its throwaway key, and refuses to touch a real release's state.
+
+For the lifecycle background, read `references/release-process.md`. For signing from the container
+(the RM's key must be on this Mac; `pinentry-mac`), read `docs/release-signing.md` in the repository.
 
 ## Tool reference
 

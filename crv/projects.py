@@ -91,7 +91,20 @@ class Project:
     def changes_heading_re(self, version: str) -> re.Pattern:
         return re.compile(self.changes_heading.replace("{v}", re.escape(version)))
 
-    def expected_dist_files(self, version: str, noboolean: bool = True, released: bool = False) -> list[str]:
+    def simple_package_release(self, version: str, files: list[str]) -> str | None:
+        """The Debian/RPM release number in the staged package names, if any: Sidecar's packages are
+        apache-cassandra-sidecar_0.5.0-1_all.deb since CASSSIDECAR-472, _0.4.0_all.deb before."""
+        v = re.escape(version)
+        prefix = re.escape(self.tarball_prefix)
+        for f in files:
+            m = re.fullmatch(rf"debian/{prefix}_{v}-(\d+)_all\.deb", f) or \
+                re.fullmatch(rf"redhat/{prefix}-{v}-(\d+)\.noarch\.rpm", f)
+            if m:
+                return m.group(1)
+        return None
+
+    def expected_dist_files(self, version: str, noboolean: bool = True, released: bool = False,
+                            package_release: str | None = None) -> list[str]:
         """Every file the release scripts are expected to stage under dist/dev for this version.
 
         For a released version (dist/release), the deb/rpm packages are not there: finish_release.sh
@@ -109,8 +122,9 @@ class Project:
         if released:
             return files
         if self.packages == "simple":
-            deb = f"debian/{self.tarball_prefix}_{version}_all.deb"
-            rpm = f"redhat/{self.tarball_prefix}-{version}.noarch.rpm"
+            rel = f"-{package_release}" if package_release else ""
+            deb = f"debian/{self.tarball_prefix}_{version}{rel}_all.deb"
+            rpm = f"redhat/{self.tarball_prefix}-{version}{rel}.noarch.rpm"
             for pkg in (deb, rpm):
                 files.append(pkg)
                 files += [pkg + s for s in SIGNATURE_SUFFIXES]

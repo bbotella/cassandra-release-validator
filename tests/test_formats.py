@@ -76,6 +76,20 @@ class ProjectNamingTest(unittest.TestCase):
         self.assertIn("redhat/apache-cassandra-sidecar-0.4.0.noarch.rpm.asc", files)
         self.assertEqual(len(files), 16)
 
+    def test_sidecar_packages_with_a_release_number(self):  # CASSSIDECAR-472, from 0.5.0
+        staged = ["apache-cassandra-sidecar-0.5.0.tar.gz", "debian/apache-cassandra-sidecar_0.5.0-1_all.deb",
+                  "redhat/apache-cassandra-sidecar-0.5.0-1.noarch.rpm"]
+        rel = projects.SIDECAR.simple_package_release("0.5.0", staged)
+        self.assertEqual(rel, "1")
+        files = projects.SIDECAR.expected_dist_files("0.5.0", package_release=rel)
+        self.assertIn("debian/apache-cassandra-sidecar_0.5.0-1_all.deb.asc", files)
+        self.assertIn("redhat/apache-cassandra-sidecar-0.5.0-1.noarch.rpm.sha512", files)
+        self.assertEqual(len(files), 16)
+
+    def test_sidecar_release_number_is_for_this_version_only(self):
+        self.assertIsNone(projects.SIDECAR.simple_package_release(
+            "0.5.0", ["debian/apache-cassandra-sidecar_0.4.0_all.deb", "debian/apache-cassandra-sidecar_0.5.0.1-1_all.deb"]))
+
     def test_analytics_expected_files(self):
         self.assertEqual(len(projects.ANALYTICS.expected_dist_files("0.5.0")), 8)
 

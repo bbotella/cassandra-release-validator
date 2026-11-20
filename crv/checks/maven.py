@@ -35,8 +35,8 @@ class Staged:
         return f"{self.group_path.replace('/', '.')}:{self.artifact}:{self.version}"
 
 
-def repo_url(repo_id: str) -> str:
-    return f"{NEXUS_REPOS}{STAGING_PREFIX}{repo_id}/"
+def repo_url(repo_id: str, base: str | None = None) -> str:
+    return f"{(base or NEXUS_REPOS).rstrip('/')}/{STAGING_PREFIX}{repo_id}/"
 
 
 def crawl(base_url: str, repo_id: str, root: str = "org/apache/cassandra/") -> list[Staged]:
@@ -84,7 +84,7 @@ def run(ctx: Context) -> None:
             r.fail("Maven repository", f"the vote email lists no artifacts to look for in {base}")
     else:
         for repo_id in ctx.staging_repos:
-            url = repo_url(repo_id)
+            url = repo_url(repo_id, ctx.args.nexus_url)
             try:
                 items = crawl(url, repo_id)
             except net.HttpError as e:
