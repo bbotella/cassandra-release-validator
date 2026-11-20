@@ -76,9 +76,12 @@ re-runs them with and without the skill. These are real, billed model runs.
   directory) and starts the next attempt.
 - **Your part:** you still Close, Drop and Release the staging repositories in the Nexus UI, and send
   the mails. `vote-email` and `post-release` write the drafts.
-- **Status:** Analytics (13 steps) and Sidecar (15 steps, including the JFrog upload) have been
-  rehearsed end to end. No real release has been cut with it yet. Cassandra's packaging steps are
-  still to do.
+- **Status:** Analytics (13 steps), Sidecar (15 steps) and Cassandra 5.0 (17 steps: debian/changelog,
+  the signed apt and yum repositories including noboolean, the JFrog upload) have been rehearsed end to
+  end. No real release has been cut with it yet. Cassandra 4.0 and 4.1 packaging (cassandra-builds'
+  own scripts) is not supported yet.
+- **Cassandra packages** are built with the project's own build images and scripts
+  (`.build/docker/`), as the official script does on 5.0 and later, as `linux/amd64`.
 - **Upstream changes:** `docs/parity.md` maps every step to the official script lines, explains each
   intentional difference, and records the official scripts' hashes. `cut-release … check-upstream`
   tells you when they change.

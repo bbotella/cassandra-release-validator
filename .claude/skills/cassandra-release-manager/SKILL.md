@@ -1,6 +1,6 @@
 ---
 name: cassandra-release-manager
-description: Expert Apache Cassandra release manager. Cuts Cassandra Analytics (and Sidecar) releases step by step with cut-release (dry run first, the user's go-ahead before every public action), and validates release candidates of Cassandra, Sidecar, Analytics and the Python, GoCQL and Java drivers with validate-release: judges findings against ASF policy, reads what other voters found, drafts the +1/-1 reply. Use it whenever the user mentions a [VOTE] Release email or lists.apache.org thread, a release candidate, a -tentative tag, a Nexus staging repository (orgapachecassandra-NNNN), dist.apache.org/repos/dist/dev/cassandra, "should I +1 this", checking signatures/checksums/LICENSE/NOTICE, or cutting, staging, re-rolling or finishing a release (prepare_release.sh, finish_release.sh) — even without naming the tools. Not for operating or modelling a Cassandra cluster, nor for Node.js driver releases.
+description: Expert Apache Cassandra release manager. Cuts Cassandra, Sidecar and Analytics releases step by step with cut-release (dry run first, the user's go-ahead before every public action), and validates release candidates of Cassandra, Sidecar, Analytics and the Python, GoCQL and Java drivers with validate-release: judges findings against ASF policy, reads what other voters found, drafts the +1/-1 reply. Use it whenever the user mentions a [VOTE] Release email or lists.apache.org thread, a release candidate, a -tentative tag, a Nexus staging repository (orgapachecassandra-NNNN), dist.apache.org/repos/dist/dev/cassandra, "should I +1 this", checking signatures/checksums/LICENSE/NOTICE, or cutting, staging, re-rolling or finishing a release (prepare_release.sh, finish_release.sh) — even without naming the tools. Not for operating or modelling a Cassandra cluster, nor for Node.js driver releases.
 ---
 
 # Cassandra release manager
@@ -169,11 +169,11 @@ user's action. Hand them the text, plus the thread link to reply to.
 ## Cutting a release (the user is the release manager)
 
 `cut-release` (wrapper: `<skill>/scripts/cut-release`) replicates the cassandra-builds release scripts
-as small resumable steps. Analytics and Sidecar have been rehearsed end to end, but no real release
-has been cut with it yet: say so when offering it. Cassandra's packaging steps are not implemented yet,
-so for Cassandra point the RM to
-`references/release-process.md` and the official scripts. `docs/parity.md` maps every step to the
-official script lines.
+as small resumable steps. Analytics, Sidecar and Cassandra 5.0 (packages included) have been rehearsed
+end to end, but no real release has been cut with it yet: say so when offering it. Cassandra 4.0 and
+4.1 have no in-tree packaging scripts: there `stage-debian` and `stage-rpm` stop with an explanation, so
+point the RM to the official scripts for the packages. `docs/parity.md` maps every step to the official
+script lines, and `references/release-process.md` section 9 lists each project's steps.
 
 ```bash
 <skill>/scripts/cut-release <project> <version> plan        # the steps, and which are done
@@ -204,17 +204,22 @@ official script lines.
    with `--dependencies ~/dev/cassandra-analytics/dependencies` or `~/dev/cassandra-sidecar/dtest-jars`.
    A rehearsal may run before the "Prepare <v> release" commit (the version check only warns), but
    `validate` then FAILs on the version: to go on past it in a rehearsal only, use `--force`.
-3. `tag` → `build-publish` (a long build: run it in the background). The user then **Closes** the
+3. Cassandra only: `changelog` finalizes debian/changelog (what `dch -r -D unstable` does) and commits
+   it on the release branch. Check the name and email its dry run shows (`--maintainer` to change
+   them); after the vote the RM forward-merges and pushes that commit, as usual.
+4. `tag` → `build-publish` (a long build: run it in the background). The user then **Closes** the
    staging repository/repositories in Nexus.
-4. `staging` (finds the closed repositories) → `stage-dist` (Sidecar: also `stage-packages`) →
+5. `staging` (finds the closed repositories) → `stage-dist` (Sidecar: also `stage-packages`; Cassandra:
+   also `stage-debian` and `stage-rpm`, about 10 and 25 minutes, in the project's own build images) →
    `validate`. A FAIL here means fix and `reroll`, not a vote.
-5. `vote-email` writes the drafts to `~/Mail`. Show the user the draft; the user sends it.
-6. After 72 hours, run `tally`. It succeeds only once the vote is 72 hours old with at least three +1s
+6. `vote-email` writes the drafts to `~/Mail`. Show the user the draft; the user sends it.
+7. After 72 hours, run `tally`. It succeeds only once the vote is 72 hours old with at least three +1s
    and no -1. Before that it reports `NOT YET` (exit 3) and the finish steps stay blocked. Never
    `--force` past it. The user confirms which +1s are binding: three binding +1s and no -1 pass the
    vote.
-7. `finish-tag` → `finish-dist` (PMC only: if the user isn't on the PMC, give a PMC member the
-   dry-run command) → Sidecar `finish-packages` → the user **Releases** the Nexus repositories →
+8. `finish-tag` → `finish-dist` (PMC only: if the user isn't on the PMC, give a PMC member the
+   dry-run command) → `finish-packages` (Sidecar and Cassandra: the JFrog upload, `ARTIFACTORY_API_KEY`)
+   → the user **Releases** the Nexus repositories →
    `nexus-release` → `verify-published` → `post-release` (the `[RELEASE]` draft and the checklist).
 
 A `-1`, or a problem the RM wants to fix: `reroll` deletes whatever the attempt got to (the tentative

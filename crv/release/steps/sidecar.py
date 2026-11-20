@@ -127,9 +127,12 @@ def finish_packages(ctx: ReleaseContext) -> str:
             "Artifactory apt/yum metadata afterwards")
 
 
-def upload_packages(ctx: ReleaseContext, layout: dict[str, list[str]], note: str = "") -> str:
-    """Uploads every file of the released debian/ and redhat/ directories to the JFrog paths in layout,
-    verifies each upload, and only then svn rm's those directories from dist/release (CF:182-237, SF:184-240)."""
+def upload_packages(ctx: ReleaseContext, layout: dict[str, list[str]], note: str = "",
+                    min_depth: dict[str, int] | None = None) -> str:
+    """Uploads the files of the released debian/ and redhat/ directories to the JFrog paths in layout,
+    verifies each upload, and only then svn rm's those directories from dist/release (CF:182-237, SF:184-240).
+    min_depth: per directory, skip files less deep than this (Cassandra uploads only debian/'s dists/ and
+    pool/, CF:192's `find -mindepth 2`)."""
     ep = ctx.endpoints
     release_dir = f"{dist_release_parent(ctx)}/{ctx.version}"
     export = ctx.workdir / "released-packages"
@@ -140,6 +143,8 @@ def upload_packages(ctx: ReleaseContext, layout: dict[str, list[str]], note: str
         root = export / sub
         for path in sorted(p for p in root.rglob("*") if p.is_file()) if root.exists() else []:
             rel = path.relative_to(root).as_posix()
+            if rel.count("/") + 1 < (min_depth or {}).get(sub, 1) or path.name.startswith("."):
+                continue
             files += [(path, t.format(name=rel)) for t in targets]
     if not files and not ctx.dry_run:
         raise RuntimeError(f"nothing to upload under {release_dir}/{{{','.join(layout)}}}")

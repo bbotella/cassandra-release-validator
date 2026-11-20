@@ -81,8 +81,33 @@ JFrog uploads, here and for Cassandra: `curl --fail --retry 3` (SF:201-232 ignor
 temporary netrc file instead of argv and the log, a HEAD check of every upload, no `-mtime -10` filter, and
 the `svn rm` from dist/release only once every upload succeeded.
 
-## Cassandra (`CP` / `CF`)
+## Cassandra (`CP` = prepare, `CF` = finish)
 
-Mapped as its steps are implemented (`cut-release cassandra <version> plan` lists them): `changelog`
-(CP:235-245), `ant publish` (CP:263), `stage-debian` (CP:280-335), `stage-rpm` (CP:337-417),
-`finish-packages` (CF:182-237).
+| Official | Replica step | Notes |
+|---|---|---|
+| CP:12 `gpg_key`, CP:27-36 tools and a running docker, CP:118-138 git repository, clean tree, `base.version` in build.xml, CP:142-165 nothing staged, released or tagged yet | `preflight` | also checks that debian/changelog's top entry is this version, which CP:239 assumes |
+| CP:167-186 show the commit and confirm | `preflight` summary + the `changelog` and `tag` dry runs | |
+| CP:235-245 `dch -r -D unstable`, then commit "Prepare debian changelog for <v>" | `changelog` | the same edit made without an editor (the distribution becomes `unstable`, the trailer names you and the date), shown before it is committed; `--maintainer` sets the name. A rehearsal writes the commit object only and leaves your checkout as it is |
+| CP:247-252 tag `<v>-tentative` at that commit, push | `tag` | |
+| CP:254-263 fresh clone from gitbox, check out the tag, `ant realclean`, `ant publish -Drelease=true -Dno-checkstyle=true -Drat.skip=true -Dant.gen-doc.skip=true` | `build-publish` | JDK from build.xml's `java.default`; a rehearsal passes `-Dmaven-repository-url=file://…` and uses its own Maven repository |
+| CP:265-266 type the staging number | `staging` | |
+| CP:268-276 svn commit the tarballs to dist/dev | `stage-dist` | |
+| CP:282-307 `ant realclean`, `.build/docker/build-debian.sh` (5.0 and later), copy `build/cassandra*` | `stage-debian` | `_docker_run.sh` is replicated, not called: the same image (`apache/cassandra-<dockerfile>:<md5>`, pulled or built), mounts and inner `_build-debian.sh`, run as `linux/amd64` by this machine's engine, so no container starts containers. 4.0 and 4.1 (cassandra-builds' `cassandra-deb-packaging.sh`, CP:305) are not supported yet |
+| CP:309-312 `debsign -k<key>` the `.changes` | `stage-debian` | |
+| CP:314-328 reprepro with `SignWith: <key>`, then `rm -R db conf` | `stage-debian` | the same `conf/distributions` |
+| CP:330-333 svn commit `debian/` | `stage-debian` | |
+| CP:357-365 `ant realclean`, `.build/docker/build-redhat.sh rpm`, copy `build/*.rpm` | `stage-rpm` | the same replica of `_docker_run.sh`; 4.x's `cassandra-rpm-packaging.sh` (CP:363) not supported yet |
+| CP:368-374 `rpmsign --addsign`, `createrepo_c .`, detached signatures of repodata | `stage-rpm` | the key is passed as `--define _gpg_name <key>` instead of read from your `~/.rpmmacros`; only the repodata files that exist are signed (CP:374's loop also tries the literal `*.bz2` when there are none) |
+| CP:378-410 the same for `redhat/noboolean` when the branch has it | `stage-rpm` | checked in the clone at the tag, which is your checkout's HEAD at that point |
+| CP:412-415 svn commit `redhat/` | `stage-rpm` | |
+| CP:430-469 mail drafts | `vote-email` | |
+| CF:140-151 final tag `cassandra-<v>`, push, delete the tentative tag | `finish-tag` | |
+| CF:157-161 `svn mv` dev → release | `finish-dist` | PMC hand-off |
+| CF:167-176 repository series (`5.0.10` → `50x`) | `finish-packages` | |
+| CF:182-207 upload `debian/`'s files at depth 2 or more (`dists/`, `pool/`) to JFrog `cassandra/` and `cassandra-deb/`, then `svn rm` it | `finish-packages` | the same depth: only the apt repository is uploaded, not the copies of the packages next to it |
+| CF:213-237 upload everything in `redhat/` to `cassandra-rpm/<series>/`, then `svn rm` it | `finish-packages` | |
+| CF:246-287 release mail and checklist | `post-release` | |
+
+The in-tree `.build/docker/_docker_run.sh` that `stage-debian` and `stage-rpm` replicate was reviewed at
+SHA-256 `d99fc586d9849d22120de53d8e0b9d74d7cccb23ee0c91f65438e88136324075` (the same on cassandra-5.0,
+cassandra-6.0 and trunk on 2026-11-20). When a release tag has another version, both steps say so.

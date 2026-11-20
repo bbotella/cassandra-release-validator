@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -54,3 +55,7 @@ def dist_release_parent(ctx: ReleaseContext) -> str:
 def label(ctx: ReleaseContext) -> str:
     """'Cassandra Analytics' — as the official commit messages and mails name the project."""
     return ctx.project.display.removeprefix("Apache ")
+
+
+# the top line of a debian/changelog entry: "cassandra (5.0.10) UNRELEASED; urgency=medium"
+CHANGELOG_HEAD = re.compile(r"^(?P<package>\S+) \((?P<version>[^)]+)\) (?P<dist>[^;]+);(?P<rest>.*)$")

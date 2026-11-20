@@ -52,6 +52,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--signing-key", default=os.environ.get("gpg_key"), help="fingerprint of your release key (default: $gpg_key)")
     p.add_argument("--jdk", action="append", default=[], metavar="N=PATH", help="JDK home inside the container, e.g. 11=/opt/jdk-11")
     p.add_argument("--thread", help="the [VOTE] thread on lists.apache.org (for tally)")
+    p.add_argument("--maintainer", metavar="'NAME <EMAIL>'",
+                   help="cassandra changelog: who the debian/changelog entry names (default: your checkout's git user)")
     p.add_argument("--from-repo", metavar="N", help="staging: start looking at orgapachecassandra-N")
     p.add_argument("--dependencies", metavar="DIR", help="rehearsal: reuse built Cassandra dtest jars from DIR (e.g. ~/dev/cassandra-analytics/dependencies, "
                         "~/dev/cassandra-sidecar/dtest-jars) instead of building them")
@@ -167,9 +169,12 @@ def _container(ep, state: ReleaseState, args) -> ReleaseContainer:
     if gitconfig.exists():
         mounts[gitconfig] = "/root/.gitconfig:ro"
     if ep.rehearsal:
+        # Cassandra installs cassandra-all <version> into the Maven repository (ant publish -> mvn-install): a
+        # rehearsal gets its own, so a rehearsal build never stands in for a real artifact in yours
+        m2 = ep.root / "m2" if state.project == "cassandra" else home / ".m2" / "repository"
         for host, target in ((home / ".gradle" / "caches", "/root/.gradle-rehearsal/caches"),
                              (home / ".gradle" / "wrapper", "/root/.gradle-rehearsal/wrapper"),
-                             (home / ".m2" / "repository", "/root/.m2/repository")):
+                             (m2, "/root/.m2/repository")):
             host.mkdir(parents=True, exist_ok=True)
             mounts[host] = target
         key = lambda: (state.data.get("rehearsal_key"), state.data.get("rehearsal_gnupghome"))  # noqa: E731

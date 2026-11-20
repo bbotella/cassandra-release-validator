@@ -190,19 +190,19 @@ the Sidecar ones and `AP`/`AF` the Analytics ones, with line numbers (`docs/pari
 | # | Step | Kind | What it does | Your part | Replicates |
 |---|---|---|---|---|---|
 | 1 | `preflight` | local | Read-only checks before anything is pushed |  | CP:27-36,118-165 SP:43-45,178-225 AP:43-45,138-183 (tools, clean tree, version, nothing staged yet) |
-| 2 | `changelog` | | *not implemented yet* | | |
+| 2 | `changelog` | outward | Finalize debian/changelog (dch -r -D unstable) and commit it | after the vote, forward-merge and push the 'Prepare debian changelog' commit, as with every release | CP:235-245 |
 | 3 | `tag` | outward | Tag the release commit \<version>-tentative and push the tag |  | CP:251-252 SP:281-282 AP:232-233 |
-| 4 | `build-publish` | | *not implemented yet* | | |
+| 4 | `build-publish` | outward | Fresh clone at the tag; ant realclean, then ant publish -Drelease=true (Maven artifacts to Nexus, signed tarballs) | after this step, Close the staging repository at https://repository.apache.org | CP:254-263 |
 | 5 | `staging` | local | Find the Nexus staging repositories you closed, and record them | before this step, Close the staging repository/repositories at https://repository.apache.org (Staging Repositories); Nexus only publishes closed ones | CP:265-266 SP:299-301 AP:249-251 (the 'staging number?' prompts) |
 | 6 | `stage-dist` | outward | Commit the source and binary tarballs (+ .asc, .sha256, .sha512) to dist/dev |  | CP:268-276 SP:303-311 AP:253-261 |
-| 7 | `stage-debian` | | *not implemented yet* | | |
-| 8 | `stage-rpm` | | *not implemented yet* | | |
+| 7 | `stage-debian` | outward | Build the .deb with the project's build image, debsign it, make the signed apt repository (reprepro), commit it to dist/dev |  | CP:282-335 |
+| 8 | `stage-rpm` | outward | Build the .rpm (and noboolean) with the project's build image, rpmsign, make the signed yum repositories, commit them to dist/dev |  | CP:339-417 |
 | 9 | `validate` | local | Run validate-release on what was staged; a FAIL blocks the vote email |  | CP:474 SP:431 AP:378 ('verify all staged artifacts') |
 | 10 | `vote-email` | local | Write the [VOTE] and [ANNOUNCE] drafts from what is really staged | send the vote email to dev@cassandra.apache.org yourself | CP:430-469 SP:361-426 AP:271-375 |
 | 11 | `tally` | local | Read the vote thread: +1/-1 so far and whether 72 hours have passed | confirm which +1s are binding (PMC); only then is the vote passed | (manual in the official process: the RM counts the votes) |
 | 12 | `finish-tag` | outward | Tag the release (\<prefix>\<version>), push it, and delete the tentative tag |  | CF:143-151 SF:147-153 AF:144-152 |
 | 13 | `finish-dist` | outward | svn mv the release from dist/dev to dist/release | only PMC members can commit to dist/release; if you aren't one, send the command above to a PMC member | CF:157-161 SF:159-163 AF:158-162 |
-| 14 | `finish-packages` | | *not implemented yet* | | |
+| 14 | `finish-packages` | outward | Upload the released apt and yum repositories to JFrog (verified), then remove them from dist/release | needs ARTIFACTORY_API_KEY (and asf_username) in the environment; the key never appears in logs | CF:182-237 |
 | 15 | `nexus-release` | local | Check that the released staging repositories reached Maven Central | before this step, Release the staging repository/repositories in the Nexus UI | CF:276 SF:280 AF:202 ('Release the staging repository') |
 | 16 | `verify-published` | local | validate-release --released on the published release |  | CF:277 ('wait for the artifacts to sync at downloads.apache.org') |
 | 17 | `post-release` | local | Write the [RELEASE] mail draft and the remaining checklist | send the [RELEASE] mail after downloads.apache.org has synced, and work through the checklist | CF:246-287 SF:245-288 AF:170-209 (mail and checklist) |

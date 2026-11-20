@@ -17,13 +17,13 @@ from ... import net, vote_email
 from ...checks.git import resolve_tag
 from ...checks.maven import Staged, crawl, repo_url
 from ...checks.runtime import find_engine
-from ...projects import STAGING_PREFIX
+from ...projects import STAGING_PREFIX, deb_version
 from .. import mail, sandbox
 from ..config import CACHE
 from ..context import ReleaseContext
 from ..executor import StepFailed
 from ..state import ordinal
-from ..util import dist_dev_dir, dist_release_parent, git, label, push_target, source_dir, svn_where
+from ..util import CHANGELOG_HEAD, dist_dev_dir, dist_release_parent, git, label, push_target, source_dir, svn_where
 from . import NotYet, step
 
 REPO = Path(__file__).resolve().parents[3]  # this repository (validate-release lives at its root)
@@ -70,6 +70,10 @@ def preflight(ctx: ReleaseContext) -> str:
     dirty = git("status", "--porcelain", "--untracked-files=no", cwd=src)
     check("FAIL" if dirty else "PASS", "Clean checkout", f"{src} at {sha[:12]}" + (" has uncommitted changes" if dirty else ""))
     ctx.state.data.update(source=str(src), head=sha)
+    if rehearsal and (git("config", "--get", "extensions.partialclone", cwd=src, check=False) or
+                      git("config", "--get-regexp", r"^remote\..*\.(promisor|partialclonefilter)$", cwd=src, check=False)):
+        # the sandbox's bare repository is cloned from your checkout, and would lack the same objects
+        check("FAIL", "Full clone", f"{src} is a partial clone (--filter); a rehearsal needs a full clone of the project")
 
     if p.version_file:
         content = git("show", f"HEAD:{p.version_file}", cwd=src, check=False)
@@ -84,6 +88,13 @@ def preflight(ctx: ReleaseContext) -> str:
     heading = p.changes_heading_re(v)
     has = any(heading.match(line.strip()) for line in changes.splitlines()[:30])
     check("PASS" if has else "FAIL", f"{p.changes_file} has a {v} section")
+    if p.key == "cassandra":  # dch -r finalizes the top entry, so it must be this version's (CP:239)
+        top = CHANGELOG_HEAD.match((git("show", "HEAD:debian/changelog", cwd=src, check=False) or "\n").splitlines()[0])
+        want = deb_version(v)
+        ok = bool(top) and top["version"] == want
+        found = f"{top['version']} ({top['dist'].strip()})" if top else "unreadable"
+        check("PASS" if ok else "FAIL", "debian/changelog top entry",
+              found + ("" if ok else f"; needs an entry for {want} (dch -v {want})"))
 
     # tools
     for tool in ("git", "gpg", "curl"):
@@ -275,8 +286,10 @@ def stage_dist(ctx: ReleaseContext) -> str:
     return _svn_commit_dir(ctx, dist_dev_dir(ctx), files, f"staging {label(ctx)} {ctx.version}", "dist")
 
 
-def _svn_commit_dir(ctx: ReleaseContext, url: str, files: list[Path], message: str, key: str) -> str:
-    """svn: check out the parent of url, add url's directory with files, commit. Returns the revision."""
+def _svn_commit_dir(ctx: ReleaseContext, url: str, files: list[Path], message: str, key: str,
+                    tree: Path | None = None) -> str:
+    """svn: check out the parent of url, add url's directory with files (and/or the whole of tree), commit.
+    Returns the revision."""
     where = svn_where(ctx)
     parent, leaf = url.rsplit("/", 1)
     wc = ctx.workdir / f"svn-{key}"
@@ -286,7 +299,10 @@ def _svn_commit_dir(ctx: ReleaseContext, url: str, files: list[Path], message: s
     target.mkdir(parents=True, exist_ok=True)
     for f in files:
         shutil.copy2(f, target / f.name)
-    ctx.run(["svn", "add", "-q", "--parents", str(target)], f"svn add {leaf}/ ({len(files)} files)", where=where, outward=True)
+    if tree is not None and tree.exists():
+        shutil.copytree(tree, target, dirs_exist_ok=True)
+    count = len(files) + (sum(1 for f in tree.rglob("*") if f.is_file()) if tree is not None and tree.exists() else 0)
+    ctx.run(["svn", "add", "-q", "--parents", str(target)], f"svn add {leaf}/ ({count} files)", where=where, outward=True)
     out = ctx.run(["svn", "commit", "-m", message, str(wc)], f"svn commit: {message}", where=where, outward=True, capture=True)
     if ctx.dry_run:
         return ""

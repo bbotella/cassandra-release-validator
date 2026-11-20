@@ -14,7 +14,7 @@ from crv import projects, vote_email  # noqa: E402
 from crv.release import config, mail  # noqa: E402
 from crv.release.executor import StepFailed  # noqa: E402
 from crv.release.state import ReleaseState  # noqa: E402
-from crv.release.steps import NotYet, analytics, common, sidecar  # noqa: E402
+from crv.release.steps import NotYet, analytics, cassandra, common, sidecar  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -231,6 +231,113 @@ class RehearsalNexusReleaseTest(unittest.TestCase):
         central = sandbox / "www" / "central" / "org" / "apache" / "cassandra"
         self.assertTrue((central / "sidecar-client" / "0.5.0-jdk8").is_dir())
         self.assertTrue((central / "sidecar-server" / "0.5.0").is_dir())
+
+
+CHANGELOG = """cassandra (5.0.10) UNRELEASED; urgency=medium
+
+  * New release
+
+ -- Past Manager <past@apache.org>  Tue, 28 Jul 2026 12:57:11 +0200
+
+cassandra (5.0.9) unstable; urgency=medium
+
+  * New release
+
+ -- Past Manager <past@apache.org>  Tue, 28 Jul 2026 12:57:11 +0200
+"""
+
+
+class CassandraChangelogTest(unittest.TestCase):
+    WHEN = "Fri, 20 Nov 2026 14:00:00 +0100"
+
+    def test_like_dch_release(self):
+        new = cassandra.release_changelog(CHANGELOG, "5.0.10", "Jane Doe <jane@apache.org>", self.WHEN)
+        lines = new.splitlines()
+        self.assertEqual(lines[0], "cassandra (5.0.10) unstable; urgency=medium")
+        self.assertEqual(lines[4], " -- Jane Doe <jane@apache.org>  Fri, 20 Nov 2026 14:00:00 +0100")
+        self.assertEqual(lines[6:], CHANGELOG.splitlines()[6:])  # older entries untouched
+
+    def test_pre_release_uses_the_debian_version(self):
+        text = CHANGELOG.replace("(5.0.10)", "(6.0~alpha3)", 1)
+        new = cassandra.release_changelog(text, "6.0-alpha3", "Jane Doe <jane@apache.org>", self.WHEN)
+        self.assertTrue(new.startswith("cassandra (6.0~alpha3) unstable;"))
+
+    def test_a_re_roll_only_refreshes_the_trailer(self):
+        once = cassandra.release_changelog(CHANGELOG, "5.0.10", "A <a@apache.org>", self.WHEN)
+        twice = cassandra.release_changelog(once, "5.0.10", "A <a@apache.org>", "Sat, 21 Nov 2026 10:00:00 +0100")
+        self.assertEqual(twice.splitlines()[0], "cassandra (5.0.10) unstable; urgency=medium")
+        self.assertIn("Sat, 21 Nov 2026", twice.splitlines()[4])
+
+    def test_the_top_entry_must_be_this_version(self):
+        with self.assertRaisesRegex(RuntimeError, "dch -v 5.0.11"):
+            cassandra.release_changelog(CHANGELOG, "5.0.11", "A <a@apache.org>", self.WHEN)
+
+
+class CassandraBuildImageTest(unittest.TestCase):
+    def clone(self, wrapper: str, body: str) -> Path:
+        clone = Path(tempfile.mkdtemp())
+        (clone / ".build" / "docker").mkdir(parents=True)
+        (clone / ".build" / "docker" / wrapper).write_text(body)
+        (clone / ".build" / "docker" / "bullseye-build.docker").write_text("FROM debian:bullseye\n")
+        (clone / "build.xml").write_text('<project><property name="java.default" value="11" />'
+                                         '<property name="java.supported" value="11,17" /></project>')
+        return clone
+
+    def test_wrappers_name_the_image_and_script(self):
+        clone = self.clone("build-debian.sh", '$(dirname -- "$0")/_docker_run.sh bullseye-build.docker docker/_build-debian.sh $1\n')
+        self.assertEqual(cassandra.wrapper_target(clone, "build-debian.sh"), ("bullseye-build.docker", "docker/_build-debian.sh"))
+        red = self.clone("build-redhat.sh", '$(dirname -- "$0")/_docker_run.sh almalinux-build.docker docker/_build-redhat.sh "${java_version}" ${rpm_dist}\n')
+        self.assertEqual(cassandra.wrapper_target(red, "build-redhat.sh"), ("almalinux-build.docker", "docker/_build-redhat.sh"))
+
+    def test_image_is_named_after_the_dockerfile_md5(self):
+        import hashlib
+        clone = self.clone("build-debian.sh", "")
+        digest = hashlib.md5(b"FROM debian:bullseye\n").hexdigest()
+        self.assertEqual(cassandra.image_name(clone, "bullseye-build.docker"), f"docker.io/apache/cassandra-bullseye-build:{digest}")
+        self.assertEqual(cassandra.build_property(clone, "java.default"), "11")
+
+    def test_4_x_has_no_in_tree_scripts(self):
+        with self.assertRaisesRegex(RuntimeError, "4.0 and 4.1"):
+            cassandra.wrapper_target(Path(tempfile.mkdtemp()), "build-debian.sh")
+
+
+class CassandraFinishPackagesTest(unittest.TestCase):
+    def test_apt_repository_only_and_every_yum_file(self):
+        root = Path(tempfile.mkdtemp())
+        released = {
+            "debian/cassandra_5.0.10_all.deb": b"top-level copy",  # depth 1: not uploaded (CF:192)
+            "debian/dists/50x/InRelease": b"r",
+            "debian/pool/main/c/cassandra/cassandra_5.0.10_all.deb": b"deb",
+            "redhat/cassandra-5.0.10-1.noarch.rpm": b"rpm",
+            "redhat/repodata/repomd.xml": b"x",
+            "redhat/noboolean/cassandra-5.0.10-1.noarch.rpm": b"nb",
+        }
+        uploads, removed = [], []
+
+        def run(cmd, description, **kw):
+            if cmd[:2] == ["svn", "export"]:
+                for rel, data in released.items():
+                    (Path(cmd[-1]) / rel).parent.mkdir(parents=True, exist_ok=True)
+                    (Path(cmd[-1]) / rel).write_bytes(data)
+            elif "PUT" in cmd:
+                uploads.append(cmd[-1].split("/artifactory/", 1)[1])
+            elif cmd[:2] == ["svn", "rm"]:
+                removed.append(cmd[-1].rsplit("/", 1)[1])
+            return ""
+
+        ctx = SimpleNamespace(
+            project=projects.CASSANDRA, version="5.0.10", dry_run=False, notes=[], note=lambda t: None, run=run,
+            workdir=root / "work", fresh_dir=lambda p: p.mkdir(parents=True, exist_ok=True),
+            endpoints=SimpleNamespace(rehearsal=True, sandbox=root / "sandbox", dist_release="file:///svn/release/cassandra/"))
+        (root / "sandbox" / "www").mkdir(parents=True)
+        cassandra.finish_packages(ctx)
+        self.assertEqual(sorted(uploads), sorted([
+            "cassandra/dists/50x/InRelease", "cassandra-deb/dists/50x/InRelease",
+            "cassandra/pool/main/c/cassandra/cassandra_5.0.10_all.deb",
+            "cassandra-deb/pool/main/c/cassandra/cassandra_5.0.10_all.deb",
+            "cassandra-rpm/50x/cassandra-5.0.10-1.noarch.rpm", "cassandra-rpm/50x/repodata/repomd.xml",
+            "cassandra-rpm/50x/noboolean/cassandra-5.0.10-1.noarch.rpm"]))
+        self.assertEqual(removed, ["debian", "redhat"])  # only after every upload
 
 
 class PreflightVersionTest(unittest.TestCase):

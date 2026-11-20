@@ -25,6 +25,8 @@ if [ -n "$CRV_RELAY_PORT" ]; then
   for i in 1 2 3 4 5 6 7 8 9 10; do [ -S /root/.gnupg/S.gpg-agent ] && break; sleep 0.3; done
   gpg --batch --quiet --import /crv/signing-pub.asc 2>/dev/null
   echo "trusted-key ${CRV_SIGNING_KEY: -16}" >> /root/.gnupg/gpg.conf
+  # every signer that doesn't name a key (maven-gpg-plugin, createrepo signatures) uses the release key
+  echo "default-key ${CRV_SIGNING_KEY}" >> /root/.gnupg/gpg.conf
 fi
 if [ -n "$CRV_JAVA_HOME" ]; then export JAVA_HOME="$CRV_JAVA_HOME" PATH="$CRV_JAVA_HOME/bin:$PATH"; fi
 exec "$@"
