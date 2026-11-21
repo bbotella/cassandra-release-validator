@@ -1,0 +1,69 @@
+// Uses the GoCQL driver the way an application does, against Cassandra on 127.0.0.1.
+// Prints the smoke protocol (CRV-STEP ... / CRV-DONE). @MODULE@ is the driver's module path from its go.mod.
+package main
+
+import (
+	"fmt"
+	"strings"
+	"time"
+
+	gocql "@MODULE@"
+)
+
+func step(name, status, detail string) {
+	fmt.Printf("CRV-STEP %s %s %s\n", name, status, strings.ReplaceAll(detail, "\n", " "))
+}
+
+func check(name string, err error, detail string) bool {
+	if err != nil {
+		step(name, "FAIL", err.Error())
+		return false
+	}
+	step(name, "OK", detail)
+	return true
+}
+
+func main() {
+	defer fmt.Println("CRV-DONE")
+	cluster := gocql.NewCluster("127.0.0.1")
+	cluster.Timeout = 30 * time.Second
+	cluster.ConnectTimeout = 30 * time.Second
+	session, err := cluster.CreateSession()
+	if !check("connect", err, "") {
+		return
+	}
+	defer session.Close()
+
+	err = session.Query("CREATE KEYSPACE IF NOT EXISTS crv_smoke_go WITH replication = {'class': 'SimpleStrategy', 'replication_factor': 1}").Exec()
+	if err == nil {
+		err = session.Query("CREATE TABLE IF NOT EXISTS crv_smoke_go.t (id int PRIMARY KEY, v text)").Exec()
+	}
+	if !check("schema", err, "") {
+		return
+	}
+	for i := 0; i < 10 && err == nil; i++ {
+		err = session.Query("INSERT INTO crv_smoke_go.t (id, v) VALUES (?, ?)", i, fmt.Sprintf("v%d", i)).Exec()
+	}
+	check("insert", err, "10 rows with bound values")
+
+	err = session.Query("BEGIN BATCH INSERT INTO crv_smoke_go.t (id, v) VALUES (100, 'b1'); INSERT INTO crv_smoke_go.t (id, v) VALUES (101, 'b2'); APPLY BATCH").Exec()
+	check("batch", err, "")
+
+	var v string
+	err = session.Query("SELECT v FROM crv_smoke_go.t WHERE id = ?", 3).Scan(&v)
+	if err == nil && v != "v3" {
+		err = fmt.Errorf("id 3 -> %q, expected v3", v)
+	}
+	check("select", err, "id 3 -> "+v)
+
+	iter := session.Query("SELECT id FROM crv_smoke_go.t").Iter()
+	n, id := 0, 0
+	for iter.Scan(&id) {
+		n++
+	}
+	err = iter.Close()
+	if err == nil && n != 12 {
+		err = fmt.Errorf("%d rows, expected 12", n)
+	}
+	check("iterate", err, fmt.Sprintf("%d rows", n))
+}

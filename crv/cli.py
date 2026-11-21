@@ -28,7 +28,7 @@ examples:
   # validate the release proposed in a vote thread (URL or id from lists.apache.org)
   validate-release https://lists.apache.org/thread/hknnwz6bj83tbpbwj1volyb6bsgvxztv
 
-  # validate the newest vote, and also start the binary tarball
+  # validate the newest vote, and also use every artifact in containers
   validate-release --latest --smoke
 
   # validate a vote email saved from your mail client (or pasted on stdin with '-')
@@ -73,16 +73,24 @@ def build_parser() -> argparse.ArgumentParser:
 
     c = p.add_argument_group("what to check")
     c.add_argument("--skip", action="append", default=[], choices=CHECK_GROUPS, help="skip a group of checks (repeatable)")
-    c.add_argument("--smoke", action="store_true", help="start the binary tarball (Cassandra/Sidecar) and check it comes up")
+    c.add_argument("--smoke", action="store_true",
+                   help="use every artifact as a user would, in throwaway containers: start and use the binary "
+                        "tarball and packages, build against the Maven artifacts, install the Python wheels, build "
+                        "a Go program, run an Analytics bulk write/read (runs release code; see README)")
+    c.add_argument("--smoke-tests", metavar="LIST", help="subset of the project's smoke tests, e.g. binary,deb (default: all)")
+    c.add_argument("--cassandra-image", action="append", metavar="IMAGE",
+                   help="Cassandra server image for the client smoke tests (repeatable; default: cassandra:5.0 and cassandra:4.1)")
+    c.add_argument("--sidecar-version", metavar="V", help="released Sidecar the Analytics smoke tests use (default: the newest)")
+    c.add_argument("--smoke-timeout", type=int, default=900, help="seconds per smoke-test step (default: 900)")
     c.add_argument("--build", action="store_true", help="build from the source tarball (Cassandra: ant, Sidecar: gradlew)")
-    c.add_argument("--java-home", help="JDK for --smoke and --build (default: $JAVA_HOME)")
-    c.add_argument("--smoke-timeout", type=int, default=300, help="seconds to wait for startup (default: 300)")
+    c.add_argument("--java-home", help="JDK for --build (default: $JAVA_HOME)")
     c.add_argument("--runtime", action="store_true",
                    help="Cassandra only: per supported JDK, build the source tarball, start the binary tarball, install the "
                         ".deb/.rpm packages and the apt/yum repositories in containers (cassandra-check-release.sh matrix)")
     c.add_argument("--runtime-tests", metavar="LIST", help="subset of build,binary,deb,apt,rpm,yum for --runtime (default: all)")
-    c.add_argument("--jdks", metavar="LIST", help="JDKs for --runtime, e.g. 11,17 (default: java.supported in build.xml)")
-    c.add_argument("--container-engine", metavar="NAME", help="docker or podman for --runtime (default: whichever works)")
+    c.add_argument("--jdks", metavar="LIST", help="JDKs for --runtime and --smoke, e.g. 11,17 (default: java.supported in "
+                                                  "build.xml for --runtime, a per-project choice for --smoke)")
+    c.add_argument("--container-engine", metavar="NAME", help="docker or podman for --runtime and --smoke (default: whichever works)")
     c.add_argument("--runtime-timeout", type=int, default=2160, help="seconds per --runtime container (default: 2160, as the script)")
 
     o = p.add_argument_group("output")
@@ -127,6 +135,12 @@ def main(argv: list[str] | None = None) -> int:
     if not VERSION_RE.match(info.version):
         print(f"error: '{info.version}' does not look like a release version", file=sys.stderr)
         return 2
+    if args.smoke:
+        _, unknown = smoke.selected(info.project.key, args.smoke_tests)
+        if unknown:
+            print(f"error: unknown --smoke-tests {', '.join(unknown)} for {info.project.display} "
+                  f"(choose from {', '.join(smoke.tests_for(info.project.key))})", file=sys.stderr)
+            return 2
 
     report = Report(verbose=args.verbose, color=False if args.no_color else None)
     project, version = info.project, info.version

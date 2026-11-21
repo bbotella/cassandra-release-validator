@@ -114,6 +114,26 @@ This is what the ASF actually releases, so it gets the strictest look.
 | apt / yum repository install fails | depends | First check the static packages section: if signatures and hashes pass there, the failure is usually the container (apt sources, yum crypto policy). If the repo metadata itself is the problem, it's a blocker for packages. |
 | A JDK not in `java.supported` fails | context | Only run it on purpose (`--jdks`). |
 
+### Smoke tests (`--smoke`)
+
+Each container's output is in `<workdir>/smoke/run-<time>/<test>.log`. The failing step's detail names it.
+
+| Finding | Severity | Notes |
+|---|---|---|
+| `...: not run` (WARN) | not a finding | An image pull, an apt/dnf mirror, a server that didn't start: the environment. Re-run with `--smoke-tests <test>`. |
+| Maven artifact doesn't resolve | blocker, once confirmed | Usually a dependency that isn't staged and isn't on Central (e.g. another project's unreleased version). A dependency that only a third-party repository has (Confluent's, for example) is a mention for a server-side artifact nobody declares as a library, and a blocker for a client artifact. A Central outage shows as many failures at once; re-run. |
+| Provenance: this release's artifact resolved from outside the staged repositories | blocker | The release depends on one of its own artifacts that wasn't staged (with `--released` this is INFO: the vote email didn't list it). |
+| SNAPSHOT resolved | blocker | Same as a SNAPSHOT dependency in a POM, but found through the whole dependency tree. |
+| .deb / .rpm won't install with its dependencies | blocker for packages | `--runtime` hides this with `--force-depends` / `--nodeps`. Check the `Depends:` / `Requires:` the log prints against what the distribution offers. |
+| Starts but nodetool / cqlsh / sstablemetadata fails | blocker, once confirmed | cqlsh failing on the image's Python is a real user problem; note the Python version (an INFO step) in the reply. |
+| cassandra-all can't write SSTables, or the node can't import them | blocker, once confirmed | The program runs with the release's own `conf/jvm*-clients.options`. |
+| Sidecar health / settings / schema / ring fails | blocker, once confirmed | Read the "Sidecar output" at the end of the log. A 421 means the configured `host` didn't match the node. |
+| Sidecar client call fails | blocker, once confirmed | |
+| Compatibility with released Analytics fails (WARN) | mention | Worth a JIRA if Sidecar broke an API Analytics uses; not this release's blocker unless the change was unintended. |
+| Analytics bulk write or read fails | blocker, once confirmed | The job's stack trace is in the log. A missing class means the published POMs miss a dependency. |
+| Python wheel ships compiled modules but `HAVE_CYTHON` is False | blocker for that wheel | The extension doesn't load on that Python/CPU. |
+| Go module doesn't build | blocker | The module as tagged must build for `go get` users. |
+
 ### Maven staging
 
 | Finding | Severity | Notes |
@@ -138,7 +158,23 @@ new", a finding that isn't on it deserves a closer look, and one that disappeare
   (not in git) and `modules/accord/gradle/wrapper/gradle-wrapper.jar` (from the accord submodule).
   Git symlinks (`redhat/noboolean/*`, `.build/run-ci.d/run_ci.py`) are stored as regular files; the tool
   reports this as INFO and treats it as identical.
+- **Cassandra 5.0.9 packages (`--smoke`)**: the binary tarball and the .deb (Debian bookworm, Python 3.11)
+  work end to end. The RPMs install `cqlshlib` only under `/usr/lib/python3.6/site-packages`, so on
+  AlmaLinux 9 (python3 is 3.9) `cqlsh` fails with `No module named 'cqlshlib'`. The noboolean RPM on
+  AlmaLinux 8 installs no `python3`, because `python(abi) >= 3.6` is satisfied by platform-python, so
+  `cqlsh` finds no interpreter until the user installs `python3`. Nodetool and the server work on both.
+  These are long-standing packaging issues, worth a JIRA, not a new -1. `CQLSSTableWriter` from `cassandra-all`
+  5.0.9 always writes `oa` SSTables (client mode forces storage compatibility NONE), and with the shipped
+  `cassandra.yaml` (`storage_compatibility_mode: CASSANDRA_4`) neither the node (`nodetool import`: "No new
+  SSTables were found") nor `tools/bin/sstabledump` ("incompatible sstable version (oa)") accepts them; with
+  mode NONE they read fine. That follows from the compatibility-mode rules (`BigFormat.isCompatible`), so it's
+  context for bulk-loading users, not a release problem. The tarball's `bin/cqlsh` accepts
+  Python 3.8–3.13 only; the tool picks a matching image, but users on Python 3.14 will hit it.
 - **Sidecar 0.4.0**: the binary tarball has no NOTICE. The RPM Release tag is empty (CASSSIDECAR-472).
+  `sidecar-server`'s POM depends on `io.confluent:kafka-avro-serializer:7.6.0`, which is not on Maven
+  Central (only in Confluent's repository), so `--smoke` reports that `sidecar-server` doesn't resolve.
+  The tarball, both Java clients (JDK 11 and the `-jdk8` build on JDK 8) and the API work with
+  Cassandra 4.1 and 5.0.
   The source tarball contains the generated `scripts/dependency-reduced-pom.xml` and
   `server-common/src/main/resources/sidecar.version`, plus `scripts/.mvn/wrapper/maven-wrapper.jar` and
   the gradle wrapper jar. POMs have no `<scm>`. `sidecar-vertx-client-all` has no sources/javadoc jars.

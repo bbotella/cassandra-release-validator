@@ -92,7 +92,8 @@ re-runs them with and without the skill. These are real, billed model runs.
 * `gpg` (GnuPG 2.x) and `git`
 * Disk space: everything is downloaded once to `~/.cache/cassandra-release-validator`. A Cassandra
   release with its deb/rpm repositories is ~1 GB, and the Analytics binary tarball alone is ~500 MB.
-* Optional: a JDK for `--smoke`; `ant` (Cassandra) or a JDK (Sidecar's `gradlew`) for `--build`.
+* Optional: Docker or Podman for `--smoke` and `--runtime` (`podman machine start` on macOS); `ant`
+  (Cassandra) or a JDK (Sidecar's `gradlew`) for `--build`.
 
 ## Usage
 
@@ -103,9 +104,11 @@ source                 lists.apache.org thread URL or id, a saved .eml / text fi
 --list                 list the recent [VOTE] Release threads and exit
 --thread-votes THREAD  show every reply in a vote thread, the vote it casts and a tally, and exit
 --latest               validate the most recent supported [VOTE] Release thread
---smoke                also start the binary tarball (Cassandra / Sidecar) and check it comes up
+--smoke                also use every artifact as a user would, in throwaway containers (see below)
+--smoke-tests LIST     only these smoke tests, e.g. binary,deb
+--cassandra-image IMG  server for the client smoke tests (repeatable; default cassandra:5.0, cassandra:4.1)
 --build                also build from the source tarball
---java-home DIR        JDK for --smoke / --build
+--java-home DIR        JDK for --build
 --runtime              Cassandra: the cassandra-check-release.sh matrix in containers, per supported JDK
 --released             validate a published release (dist/release, Maven Central, public deb/rpm repos)
 --skip GROUP           skip git | dist | packages | source | binary | maven (repeatable)
@@ -161,6 +164,32 @@ the JDKs come from `build.xml`, it uses a `signed-by` keyring instead of the rem
 installs from public repositories pin the exact version. It runs code from the release, so it is
 opt-in.
 
+### Smoke tests in containers (`--smoke`)
+
+`--smoke` uses every artifact the release ships the way a user would, and reports anything that doesn't
+work as a FAIL. Everything runs in throwaway containers, never on your machine. The clients talk to an
+official `cassandra:<series>` image (by default `cassandra:5.0` and `cassandra:4.1`; `--cassandra-image` to
+choose), and join its network namespace, so nothing is published on a port. Maven consumers take this
+release's artifacts only from the copy the tool has already verified (mounted read-only, with
+`checksumPolicy=fail`), and third-party dependencies from Maven Central. After resolving, the tool checks
+that none of this release's artifacts came from anywhere else and that nothing resolved is a SNAPSHOT.
+
+| Project | Tests (`--smoke-tests`) |
+|---|---|
+| Cassandra | `binary`: start the tarball, `nodetool version`/`status`, a `cqlsh` round trip, flush and `tools/bin/sstablemetadata`. `deb`: `apt-get install` the .deb files with their real dependencies on the Debian release that has the Java they ask for, start as user `cassandra`, the same checks. `rpm`: `dnf install` on AlmaLinux 9 (noboolean on AlmaLinux 8), the same. `maven`: every artifact resolves; `cassandra-all` writes SSTables with `CQLSSTableWriter`, the release's `tools/bin/sstabledump` reads every row back, and the node imports them with `nodetool import` when its `storage_compatibility_mode` accepts that format |
+| Sidecar | `binary`: start the tarball inside each server's container with the shipped `sidecar.yaml` pointed at the node; health (process, CQL, JMX), node settings with both versions, CQL-backed settings, schema and ring. `client`: every artifact resolves; a program on `sidecar-vertx-client` (and the `-jdk8` build on JDK 8) calls the running Sidecar. `analytics`: the newest released Analytics bulk-writes and reads through it (a WARN if not: compatibility with another release). `deb`, `rpm`: install on Debian bookworm / AlmaLinux 9 and the same API checks |
+| Analytics | `resolve`: every artifact resolves. `bulk`: for each Spark/Scala build staged and each server, a Spark job in local mode with only `cassandra-analytics-core_<spark>_<scala>` declared bulk-writes 10,000 rows through a released Sidecar (signature verified against KEYS) and bulk-reads them back. Spark and JDK versions come from the build profiles; Spark 4 runs on Cassandra 5.0+ only, as in the project's CI |
+| Python driver | `sdist`: `pip install` the source distribution (it compiles the extensions). `wheels`: each Linux wheel on its own Python version and CPU (x86_64 under emulation on Apple silicon); a wheel with compiled modules must load them. Then the version, a connection, a prepared batch and selects |
+| GoCQL driver | `module`: a Go program imports the module path from `go.mod`, wired to the verified source tarball with `replace`; `go mod tidy`, build, then schema, inserts, a batch, select and iteration against each server |
+| Java driver | `resolve`: every artifact resolves. `client`: 4.x with the query builder and the object mapper (the annotation processor generates it at build time), again on `java-driver-core-shaded`; 3.x with the mapper. On JDK 8 and 21 (4.x) or 8 and 17 (3.x); `--jdks` to choose |
+
+A problem with the environment rather than the release (an image that can't be pulled, an apt mirror
+that is down) is a WARN "not run", never a FAIL. Each container's output is in
+`<workdir>/smoke/run-<time>/*.log`; read it before calling a FAIL a release problem. The first run
+downloads several GB of images and dependencies (Maven, Python, Go, Debian, AlmaLinux, Cassandra) and
+takes 10 to 30 minutes per project; later runs reuse them. The apt and yum repository installs are in
+`--runtime`, which keeps the community script's matrix.
+
 ### Re-validating an old release
 
 After a vote passes, the RC's staging locations disappear: the `-tentative` tag is removed, the
@@ -190,7 +219,7 @@ tool at it. This is how the tool itself was tested:
 | Drivers | Python: sdist and wheels (wheel metadata version, LICENSE/NOTICE inside, Python versions and platforms covered); GoCQL: source tarball only; Java: source tarball and every artifact in the Nexus staging repo (POM `<licenses>`/`<scm>` inherited from a staged parent count). No binary-tarball or package checks. A tag that exists only on the GitHub mirror and not on gitbox is a warning |
 | Binary tarball | top-level directory; LICENSE and NOTICE; key files (`bin/cassandra`, `lib/apache-cassandra-<v>.jar`, …); jars carry the release version; no SNAPSHOT jars; `Implementation-Version` of the Cassandra jar |
 | Maven staging | each staging repo is open and crawled; every artifact listed in the email is staged; every file has a valid `.asc` and matching `.md5` / `.sha1` (plus `.sha256` / `.sha512` when present), and so does every `.asc`; POM coordinates match; no SNAPSHOT dependencies; license, `<scm>`, sources and javadoc jars present (warnings) |
-| `--smoke` | Cassandra starts, `nodetool version` reports the version and `nodetool status` shows the node `UN`; Sidecar starts and `/api/v1/__health` returns OK |
+| `--smoke` | every artifact used as a user would, in containers: tarballs and packages started and used, Maven artifacts resolved and built against, Python wheels and sdist installed, a Go program built, an Analytics bulk write and read (see above) |
 | `--build` | Cassandra `ant jar`, Sidecar `./gradlew assemble` from the source tarball |
 | `--runtime` | Cassandra, per supported JDK in containers: source build, binary tarball, .deb and .rpm packages, apt and yum repositories (see above) |
 
@@ -212,7 +241,6 @@ The tool doesn't replace judgement. Things voters often still do by hand:
 
 * look at `CHANGES.txt` / `NEWS.txt` for the release content;
 * run the full Apache RAT (`ant rat-check`, or the Gradle RAT task) and the test suite;
-* install the Sidecar `.deb` / `.rpm` in a container and start the service (`--runtime` covers Cassandra);
 * build Cassandra Analytics, which first builds Cassandra itself (`./scripts/build-dependencies.sh`).
 
 ## Safety
@@ -223,8 +251,8 @@ Everything downloaded is treated as untrusted:
   is never read or changed.
 * tarballs are extracted with Python's `tarfile` `data` filter, which rejects absolute paths, `..`
   traversal and links that escape the destination.
-* nothing from the release is executed unless you pass `--smoke`, `--build` or `--runtime` (`--runtime`
-  only inside throwaway containers).
+* nothing from the release is executed unless you pass `--smoke`, `--build` or `--runtime`. `--smoke`
+  and `--runtime` run it only inside throwaway containers; `--build` runs the build on your machine.
 
 ## Keeping it up to date
 
@@ -241,7 +269,8 @@ validate-release        entry point
 crv/cli.py              argument parsing and orchestration
 crv/vote_email.py       vote email parsing, lists.apache.org client
 crv/projects.py         per-project conventions
-crv/checks/*.py         git, dist, packages, source, binary, maven, smoke
+crv/checks/*.py         git, dist, packages, source, binary, maven, runtime
+crv/checks/smoke/       --smoke: per-project tests, the container engine, the programs run in containers
 crv/gpg.py              isolated keyring + signature verification
 crv/pkgformats.py       .deb / .rpm / Debian control file readers
 ```

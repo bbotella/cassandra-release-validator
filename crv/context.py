@@ -32,6 +32,7 @@ class Context:
     # Filled in while checks run
     dist_files: dict[str, Path] = field(default_factory=dict)  # relative path -> local file
     package_files: dict[str, Path] = field(default_factory=dict)  # deb/rpm repository files (staged or published)
+    maven_repos: set[str] = field(default_factory=set)  # <workdir>/maven/<id> folders this run downloaded and checked
     git_commit: str | None = None  # commit the tag resolves to
     git_dir: Path | None = None  # bare-ish local repo holding the fetched commit
     src_root: Path | None = None  # extracted source tarball top directory

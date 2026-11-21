@@ -124,11 +124,32 @@ Depending on the release and the user's time, offer (don't silently skip, don't 
 These three run quickly on what validate-release already downloaded, plus a few small requests to JIRA
 and dist.apache.org. They read the artifacts but never execute them. `references/triage.md` (section 4)
 explains how to read their output.
-- **`--smoke`** (start Cassandra/Sidecar from the binary tarball and check `nodetool version` / the
-  health endpoint) and **`--build`** (build from the source tarball). These execute code from the
-  release, so ask the user before running them, and pass `--java-home` with a JDK the branch supports.
-  The `java.supported` property in `build.xml` at the tag is authoritative: 4.0/4.1 support 8 and 11,
-  5.0 supports 11 and 17, and 6.0/trunk support 11, 17 and 21. Sidecar and Analytics build with Java 11.
+- **`--smoke`** (every project): uses each artifact the way a user would, in throwaway containers, against
+  official `cassandra:5.0` and `cassandra:4.1` images:
+  - Cassandra: the tarball and the .deb/.rpm are started and used (nodetool, cqlsh, sstablemetadata), and
+    the packages are installed with their real dependencies. `cassandra-all` writes SSTables that the node
+    imports.
+  - Sidecar: the tarball and the packages serve the API next to a node, the Java client calls it, and the
+    released Analytics bulk-writes through it.
+  - Analytics: a Spark bulk write and read per Spark/Scala build staged.
+  - Python driver: the sdist and each Linux wheel are pip-installed and used.
+  - GoCQL driver: a Go program is built against the source tarball.
+  - Java driver: the 4.x mapper/query builder (and the shaded core), or 3.x with its mapper.
+  - All Maven projects: every staged artifact resolves with its dependencies. None of this release's
+    artifacts may come from outside the staged repositories, and none may be a SNAPSHOT.
+
+  It executes release code (only in containers), needs Docker or Podman and takes 10 to 30 minutes per
+  project on a first run, so ask the user before running it. Narrow it with `--smoke-tests` and
+  `--cassandra-image`. When you read the results:
+  - A **WARN "not run"** is the environment (an image pull, a mirror), never a reason to vote -1.
+  - A **FAIL** needs its log (`<workdir>/smoke/run-*/`) read before you call it a release problem.
+    `references/triage.md` (smoke tests) says how to judge each kind.
+  - In a reply, the highlight line says what was used, e.g. "installed the .deb on Debian bookworm and
+    ran cqlsh".
+- **`--build`** (build from the source tarball, on the host). This executes the build, so ask the user
+  first and pass `--java-home` with a JDK the branch supports. The `java.supported` property in
+  `build.xml` at the tag is authoritative: 4.0/4.1 support 8 and 11, 5.0 supports 11 and 17, and
+  6.0/trunk support 11, 17 and 21. Sidecar and Analytics build with Java 11.
 - **`--runtime`** (Cassandra): the same matrix as the community's `cassandra-check-release.sh`
   (cassandra-builds PR 32). For every JDK in `java.supported`, in containers, it builds the source tarball,
   starts the binary tarball, installs the .deb and .rpm packages (plus noboolean), and installs from the
@@ -137,8 +158,7 @@ explains how to read their output.
   ask first. It needs Docker or Podman (`podman machine start` on macOS). Narrow it with `--jdks` or
   `--runtime-tests`. A failure's log is in `<workdir>/runtime/`; read it before calling it a release
   problem, because image or network trouble (apt mirrors, yum crypto policy) is common.
-- Running the project's own RAT task, or installing Sidecar's .deb/.rpm in a container, when the user
-  wants licensing or packaging covered more deeply.
+- Running the project's own RAT task when the user wants licensing covered more deeply.
 
 ### 6. Recommend a vote and draft the reply
 
@@ -246,11 +266,14 @@ validate-release [source] [options]
   --dist-url URL           dist directory override
   --maven-base URL         check the email's Maven artifacts in another repository (e.g. Maven Central)
   --skip GROUP             git | dist | packages | source | binary | maven
-  --smoke / --build        start the binary tarball / build from source (executes release code)
+  --smoke                  use every artifact as a user would, in containers (executes release code)
+  --smoke-tests LIST       narrow --smoke, e.g. binary,deb (the list is per project; an unknown name prints it)
+  --cassandra-image IMG    server for the client smoke tests (repeatable; default cassandra:5.0 and cassandra:4.1)
+  --build                  build from the source tarball on the host (executes the build)
   --runtime                Cassandra: cassandra-check-release.sh matrix in containers (executes release code)
-  --jdks / --runtime-tests narrow --runtime, e.g. --jdks 17 --runtime-tests binary,deb,rpm
+  --jdks / --runtime-tests narrow --runtime (--jdks also --smoke), e.g. --jdks 17 --runtime-tests binary,deb,rpm
   --released               check a published release (dist/release, Maven Central, public deb/rpm repos)
-  --java-home DIR          JDK for --smoke / --build
+  --java-home DIR          JDK for --build
   -v                       every item of every check
 ```
 

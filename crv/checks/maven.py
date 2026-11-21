@@ -115,6 +115,7 @@ def run(ctx: Context) -> None:
     errors = net.download_many(pairs, jobs=ctx.jobs, refresh=ctx.args.refresh, progress=r.log)
     if errors:
         r.fail("Download Maven artifacts", f"{len(errors)} failed", [f"{u}: {e}" for u, e in errors.items()])
+    ctx.maven_repos.update(s.repo_id for s in staged)  # what --smoke may use as verified copies
 
     with ThreadPoolExecutor(max_workers=ctx.jobs) as pool:
         pom_index = {(s.group_path.replace("/", "."), s.artifact, s.version): _local_dir(ctx, s) / f"{s.artifact}-{s.version}.pom"
